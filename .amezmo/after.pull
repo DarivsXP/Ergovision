@@ -1,0 +1,17 @@
+#!/bin/bash
+set -e
+
+echo "Installing Composer..."
+composer install --no-interaction --prefer-dist --optimize-autoloader
+
+echo "Migrating Database..."
+php artisan migrate --force
+
+echo "Clearing Caches..."
+php artisan config:clear
+php artisan route:clear
+php artisan view:clear
+
+echo "Building Frontend..."
+npm ci
+npm run build
