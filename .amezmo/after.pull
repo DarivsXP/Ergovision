@@ -1,0 +1,26 @@
+#!/bin/bash
+
+# 1. Stop on error (Safety first)
+set -e
+
+# 2. Install PHP Dependencies (Laravel)
+echo "Installing Composer Dependencies..."
+composer install --no-interaction --prefer-dist --optimize-autoloader
+
+# 3. Migrate Database (Add your new columns)
+echo "Migrating Database..."
+php artisan migrate --force
+
+# 4. Clear Caches (Fixes 'Old Code' bugs)
+echo "Clearing Caches..."
+php artisan config:clear
+php artisan route:clear
+php artisan view:clear
+
+# 5. Build Vue Frontend (The Camera UI)
+# Note: We use 'ci' for a clean install, crucial for servers
+echo "Building Frontend Assets..."
+npm ci
+npm run build
+
+echo "Deployment Complete!"
