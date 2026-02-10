@@ -1,4 +1,23 @@
 #!/bin/bash
-echo "Bypassing server build..."
-# We already built the assets locally, so we tell the server to just accept them.
-exit 0
+set -e
+
+echo "--- SMART SAFE MODE ---"
+
+# 1. Link Storage (Crucial for logs to work)
+echo "Linking Storage..."
+php artisan storage:link
+
+# 2. Fix Permissions (The 'chmod' magic)
+echo "Fixing Permissions..."
+chmod -R 775 storage bootstrap/cache
+
+# 3. Clear Caches (To remove old paths)
+echo "Clearing Caches..."
+php artisan config:clear
+php artisan route:clear
+php artisan view:clear
+
+# 4. Skip NPM (We already uploaded the files manually)
+echo "Skipping NPM Build (Using uploaded assets)..."
+
+echo "--- DEPLOYMENT SUCCESS ---"
