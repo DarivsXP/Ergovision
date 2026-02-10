@@ -1,21 +1,23 @@
 #!/bin/bash
 
-echo "--- AGGRESSIVE STORAGE FIX ---"
+echo "--- POLITE PERMISSION FIX ---"
 
-# 1. BULLDOZER: Delete the storage folder if it exists
-# This clears the path so Amezmo can create its symlink without crashing.
-echo "Removing storage folder obstacle..."
-rm -rf storage
+# 1. Unlock Permissions
+# We do NOT delete the storage folder.
+# Instead, we make sure it is readable/writable so Amezmo can move it.
+echo "Unlocking folder permissions..."
+chmod -R 775 storage bootstrap/cache
 
-# 2. Clear Caches
+# 2. Clear Caches (Standard)
 echo "Clearing Caches..."
 php artisan config:clear || true
 php artisan route:clear || true
 php artisan view:clear || true
 
-# 3. Link Storage (Now it should work because the path is clear)
-echo "Linking Storage..."
+# 3. Create the Public Link
+# This creates the link in public/storage, which doesn't conflict with Amezmo.
+echo "Linking Public Storage..."
 php artisan storage:link || true
 
-echo "--- SUCCESS ---"
+echo "--- READY FOR AMEZMO HANDOVER ---"
 exit 0
