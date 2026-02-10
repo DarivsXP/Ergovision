@@ -181,51 +181,63 @@ const lockNeutralPosition = () => {
 // --- 4. Main AI Loop ---
 const onResults = async (results) => {
     const now = Date.now();
+    
+    // 1. Safety Check: Do we have a body detected?
     if (!results.poseLandmarks || results.poseLandmarks.length < 25) {
         isDetected.value = false;
         return;
     }
     isDetected.value = true;
 
+    // 2. Throttling: Only send a frame every 200ms (5 FPS) to save bandwidth
     if (now - lastProcessTime < 200) return;
     lastProcessTime = now;
 
     try {
-        const res = await axios.post('http://127.0.0.1:5000/predict', {
+        // --- THE FIX IS HERE ---
+        // We use the environment variable. 
+        // Locally it is 'http://127.0.0.1:5000...'
+        // On Amezmo it is 'https://ergovision-ai.onrender.com...'
+        const res = await axios.post(import.meta.env.VITE_AI_ENDPOINT, {
             landmarks: results.poseLandmarks,
             ideal_back: myIdealBack.value,
             ideal_neck: myIdealNeck.value
         });
 
+        // 3. Update Angles for UI
         angles.value = res.data.angles;
 
-        // Calibration Buffer Logic
+        // 4. Calibration Buffer Logic (during the "Locking" phase)
         if (isLocking.value) {
             calibrationBuffer.value.push(res.data.angles);
             if (calibrationBuffer.value.length > 15) calibrationBuffer.value.shift();
         }
 
-        // --- MAIN LOGIC ---
+        // 5. Main Detection Logic (after calibration)
         if (isCalibrated.value) {
             currentScore.value = res.data.score;
             
-            // 1. AI Opinion (The Physician)
+            // A. AI Opinion (The Physician's Brain)
             const aiSaysSlouch = res.data.label === 1;
 
-            // 2. Score Opinion (The Safety Net)
+            // B. Score Opinion (The Safety Net)
             // If score drops below 75, we consider it a slouch regardless of AI
             const scoreIsFailing = currentScore.value < 75;
 
-            // COMBINED DECISION:
+            // C. Combined Decision
             isSlouching.value = aiSaysSlouch || scoreIsFailing;
             
+            // D. Provide Feedback (Audio/Visual)
             handleAdaptiveFeedback(isSlouching.value);
 
+            // E. Record Statistics
             sessionData.value.scores.push(res.data.score);
             sessionData.value.totalFrames++;
             if (isSlouching.value) sessionData.value.slouchFrames++;
         }
-    } catch (err) { console.error("AI Server Error"); }
+    } catch (err) { 
+        console.error("AI Server Error: Check if Python server is running."); 
+    }
 };
 
 const startCamera = async () => {
