@@ -1,23 +1,16 @@
 #!/bin/bash
 
-echo "--- POLITE PERMISSION FIX ---"
+echo "--- MINIMALIST DEPLOY ---"
 
-# 1. Unlock Permissions
-# We do NOT delete the storage folder.
-# Instead, we make sure it is readable/writable so Amezmo can move it.
-echo "Unlocking folder permissions..."
-chmod -R 775 storage bootstrap/cache
-
-# 2. Clear Caches (Standard)
+# 1. Clear Caches (This is safe and necessary)
 echo "Clearing Caches..."
 php artisan config:clear || true
 php artisan route:clear || true
 php artisan view:clear || true
 
-# 3. Create the Public Link
-# This creates the link in public/storage, which doesn't conflict with Amezmo.
-echo "Linking Public Storage..."
-php artisan storage:link || true
+# 2. DO NOT TOUCH STORAGE
+# We let Amezmo's internal "Hooking up persistent storage" step handle the linking.
+# If we touch it here, we break Amezmo's automation.
 
-echo "--- READY FOR AMEZMO HANDOVER ---"
+echo "--- HANDING OVER TO AMEZMO ---"
 exit 0
