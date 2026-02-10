@@ -52,5 +52,9 @@ Route::delete('/posture-chunks/{id}', [PostureChunkController::class, 'destroy']
     
 
 // Route::post('/posture-chunks', [PostureChunkController::class, 'store'])->name('chunks.store');
+Route::get('/force-migrate', function () {
+    \Illuminate\Support\Facades\Artisan::call('migrate', ['--force' => true]);
+    return 'Database Migration Completed Successfully!';
+});
 
 require __DIR__.'/auth.php';
