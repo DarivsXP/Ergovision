@@ -1,28 +1,18 @@
 #!/bin/bash
 
-# NOTE: We removed 'set -e' so the script won't die on small warnings.
+echo "--- FINAL DEPLOYMENT SCRIPT ---"
 
-echo "--- STARTING BULLETPROOF DEPLOY ---"
-
-# 1. Manually create folders (Git often ignores empty folders, causing crashes)
-echo "Ensuring storage structure..."
-mkdir -p storage/framework/{sessions,views,cache}
-mkdir -p storage/logs
-mkdir -p bootstrap/cache
-
-# 2. Fix Permissions (Suppress errors with || true)
-echo "Fixing permissions..."
-chmod -R 775 storage bootstrap/cache || true
-
-# 3. Link Storage (If it exists, this usually crashes. We force it to continue.)
-echo "Linking Storage..."
-php artisan storage:link || echo "Storage link already exists (Continuing...)"
-
-# 4. Clear Caches
+# 1. Clear Caches (Standard)
 echo "Clearing Caches..."
 php artisan config:clear || true
 php artisan route:clear || true
 php artisan view:clear || true
 
-echo "--- DEPLOYMENT SUCCESSFUL ---"
+# 2. Link Public Storage
+# This creates the link in 'public/storage', which is safe.
+# We do NOT touch the main 'storage/' folder anymore.
+echo "Linking Public Storage..."
+php artisan storage:link || true
+
+echo "--- READY FOR AMEZMO HANDOVER ---"
 exit 0
