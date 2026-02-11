@@ -6,10 +6,15 @@ import { resolvePageComponent } from 'laravel-vite-plugin/inertia-helpers';
 import { createApp, h } from 'vue';
 import { ZiggyVue } from '../../vendor/tightenco/ziggy';
 
-const appName = import.meta.env.VITE_APP_NAME || 'Laravel';
+// [CHANGE 1] Set default name to Ergovision AI
+const appName = import.meta.env.VITE_APP_NAME || 'Ergovision AI';
 
 createInertiaApp({
-    title: (title) => `${title} - ${appName}`,
+    // [CHANGE 2] Smart Title Logic
+    // If a page has a title -> "Dashboard - Ergovision AI"
+    // If no title -> "Ergovision AI"
+    title: (title) => title ? `${title} - ${appName}` : appName,
+
     resolve: (name) =>
         resolvePageComponent(
             `./Pages/${name}.vue`,
@@ -22,6 +27,7 @@ createInertiaApp({
             .mount(el);
     },
     progress: {
-        color: '#4B5563',
+        // [OPTIONAL] Changed progress bar color to your Indigo brand color
+        color: '#6366f1',
     },
 });
