@@ -1,24 +1,15 @@
 <script setup>
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
-import { ref, onUnmounted, onMounted } from 'vue';
+import { ref, onUnmounted, onMounted, computed } from 'vue';
 import { router } from '@inertiajs/vue3'; 
 import axios from 'axios';
 
 // --- SMART CONFIGURATION ---
-// Automatically detect if we are running locally or on the live web
 const isLocal = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+const AI_ENDPOINT = isLocal ? 'http://127.0.0.1:5000/predict' : 'https://ergovision-ai.onrender.com/predict';
+const AI_BASE_URL = isLocal ? 'http://127.0.0.1:5000/' : 'https://ergovision-ai.onrender.com/';
 
-// If Local -> Use Local Python (127.0.0.1:5000)
-// If Live  -> Use Render (ergovision-ai.onrender.com)
-const AI_ENDPOINT = isLocal 
-    ? 'http://127.0.0.1:5000/predict' 
-    : 'https://ergovision-ai.onrender.com/predict';
-
-const AI_BASE_URL = isLocal 
-    ? 'http://127.0.0.1:5000/' 
-    : 'https://ergovision-ai.onrender.com/';
-
-console.log(`Running in ${isLocal ? 'LOCAL' : 'LIVE'} mode. Connecting to: ${AI_ENDPOINT}`);
+console.log(`Running in ${isLocal ? 'LOCAL' : 'LIVE'} mode.`);
 
 // --- State Variables ---
 const videoRef = ref(null);
@@ -30,6 +21,7 @@ const calibrationCountdown = ref(0);
 const currentScore = ref(100);
 const isSlouching = ref(false);
 const statusMessage = ref("Initializing...");
+const sessionDurationSecs = ref(0); // [NEW] Timer state
 
 // Posture Reference Data
 const angles = ref({ neck: 0, back: 0 });
@@ -47,34 +39,34 @@ let camera = null;
 let chunkStartTime = Date.now();
 let lastProcessTime = 0;
 let uploadInterval = null;
+let durationInterval = null; // [NEW] Timer interval
 let slouchStartTime = null; 
 let lastNotificationTime = 0;
 
 const sessionData = ref({ scores: [], slouchFrames: 0, totalFrames: 0, alerts: 0 });
 
-// --- 0. The "Wake Up" Protocol ---
+// --- Helper: Format Timer ---
+const formattedDuration = computed(() => {
+    const m = Math.floor(sessionDurationSecs.value / 60).toString().padStart(2, '0');
+    const s = (sessionDurationSecs.value % 60).toString().padStart(2, '0');
+    return `${m}:${s}`;
+});
+
 const wakeUpServer = async () => {
     try {
-        console.log("Pinging AI Server to wake up...");
         await axios.get(AI_BASE_URL, { timeout: 3000 });
-        console.log("AI Server is AWAKE.");
         statusMessage.value = "AI Ready";
     } catch (e) {
-        console.log("AI Server might be waking up (Cold Start)...");
         statusMessage.value = "Waking up AI...";
     }
 };
 
 onMounted(() => {
-    // 1. Ask for Notification Permissions
     if ("Notification" in window && Notification.permission !== "granted") {
         Notification.requestPermission();
     }
-
-    // 2. Trigger Server Wake Up immediately
     wakeUpServer();
 
-    // 3. Initialize MediaPipe
     if (window.Pose) {
         pose = new window.Pose({
             locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/pose/${file}`,
@@ -87,26 +79,20 @@ onMounted(() => {
         });
         pose.onResults(onResults);
     } else {
-        console.error("MediaPipe Pose not loaded");
         alert("Error: AI Libraries not loaded. Please refresh.");
     }
 });
 
-// --- 1. Saving Logic ---
 const uploadSessionData = () => {
     if (sessionData.value.totalFrames === 0) return;
 
-    // Calculate Actual Duration
     const now = Date.now();
     const actualDuration = Math.round((now - chunkStartTime) / 1000); 
-    
-    // Reset timer for NEXT chunk
     chunkStartTime = now;
 
     const count = sessionData.value.scores.length || 1;
     const avgScore = Math.round(sessionData.value.scores.reduce((a, b) => a + b, 0) / count);
     
-    // Recalculate slouch duration
     const slouchRatio = sessionData.value.slouchFrames / sessionData.value.totalFrames;
     const slouchSecs = Math.round(slouchRatio * actualDuration);
 
@@ -117,7 +103,6 @@ const uploadSessionData = () => {
         alert_count: sessionData.value.alerts || 0
     };
 
-    // Since you are on the same domain (ergovision.online), relative path works perfectly
     router.post('/posture-chunks', payload, {
         preserveScroll: true,
         preserveState: true,
@@ -129,7 +114,6 @@ const uploadSessionData = () => {
     });
 };
 
-// --- 2. Adaptive Notification Logic ---
 const handleAdaptiveFeedback = (slouching) => {
     if (slouching) {
         if (!slouchStartTime) slouchStartTime = Date.now();
@@ -164,7 +148,6 @@ const handleAdaptiveFeedback = (slouching) => {
     }
 };
 
-// --- 3. Calibration Logic ---
 const triggerCalibration = () => {
     if (isLocking.value || isCalibrated.value) return;
     
@@ -183,7 +166,6 @@ const triggerCalibration = () => {
 };
 
 const lockNeutralPosition = () => {
-    // Safety: If buffer is empty, AI didn't see anything
     if (calibrationBuffer.value.length < 1) {
         isLocking.value = false;
         alert("Calibration Failed: AI could not see you clearly. Please ensure good lighting and try again.");
@@ -191,76 +173,73 @@ const lockNeutralPosition = () => {
         return;
     }
     
-    // Average buffer for baseline
-    myIdealBack.value = calibrationBuffer.value.reduce((a, b) => a + b.back, 0) / calibrationBuffer.value.length;
-    myIdealNeck.value = calibrationBuffer.value.reduce((a, b) => a + b.neck, 0) / calibrationBuffer.value.length;
+    // Safety check for zeros
+    const validReadings = calibrationBuffer.value.filter(r => r.back > 0 && r.neck > 0);
+    if(validReadings.length === 0) {
+         isLocking.value = false;
+         alert("Bad Data. Please try again.");
+         return;
+    }
+
+    myIdealBack.value = validReadings.reduce((a, b) => a + b.back, 0) / validReadings.length;
+    myIdealNeck.value = validReadings.reduce((a, b) => a + b.neck, 0) / validReadings.length;
     
     isCalibrated.value = true;
     isLocking.value = false;
-    statusMessage.value = "Baseline Locked - Monitoring Started";
+    statusMessage.value = "Monitoring Started";
     successSound.play();
     
-    // START RECORDING
     chunkStartTime = Date.now(); 
     if (uploadInterval) clearInterval(uploadInterval);
     uploadInterval = setInterval(uploadSessionData, 30000);
 };
 
-// --- 4. Main AI Loop ---
 const onResults = async (results) => {
     const now = Date.now();
-    
-    // Safety Check
     if (!results.poseLandmarks || results.poseLandmarks.length < 25) {
         isDetected.value = false;
         return;
     }
     isDetected.value = true;
 
-    // Throttling (200ms = 5 FPS)
     if (now - lastProcessTime < 200) return;
     lastProcessTime = now;
 
     try {
-        // Send to AI Server
         const res = await axios.post(AI_ENDPOINT, {
             landmarks: results.poseLandmarks,
             ideal_back: myIdealBack.value,
             ideal_neck: myIdealNeck.value
         });
 
-        // Update UI
         angles.value = res.data.angles;
 
-        // Calibration Phase
         if (isLocking.value) {
             calibrationBuffer.value.push(res.data.angles);
             if (calibrationBuffer.value.length > 15) calibrationBuffer.value.shift();
         }
 
-        // Monitoring Phase
         if (isCalibrated.value) {
             currentScore.value = res.data.score;
-            
             const aiSaysSlouch = res.data.label === 1;
             const scoreIsFailing = currentScore.value < 75;
-
             isSlouching.value = aiSaysSlouch || scoreIsFailing;
-            
             handleAdaptiveFeedback(isSlouching.value);
-
             sessionData.value.scores.push(res.data.score);
             sessionData.value.totalFrames++;
             if (isSlouching.value) sessionData.value.slouchFrames++;
         }
     } catch (err) { 
-        console.error("AI Server Error (might be waking up):", err); 
+        console.error("AI Server Error"); 
     }
 };
 
 const startCamera = async () => {
     try {
-        const stream = await navigator.mediaDevices.getUserMedia({ video: true });
+        // [FIX] Constraint for mobile cameras
+        const stream = await navigator.mediaDevices.getUserMedia({ 
+            video: { facingMode: "user", width: { ideal: 640 }, height: { ideal: 480 } } 
+        });
         
         camera = new window.Camera(videoRef.value, {
             onFrame: async () => { if (pose) await pose.send({ image: videoRef.value }); },
@@ -269,8 +248,16 @@ const startCamera = async () => {
         camera.start();
         isCameraOn.value = true;
         isCalibrated.value = false;
+
+        // [NEW] Start Session Timer
+        sessionDurationSecs.value = 0;
+        if (durationInterval) clearInterval(durationInterval);
+        durationInterval = setInterval(() => {
+            sessionDurationSecs.value++;
+        }, 1000);
+
     } catch (e) {
-        alert("Camera Permission Denied. Please allow camera access in your browser settings.");
+        alert("Camera access denied.");
         console.error(e);
     }
 };
@@ -283,6 +270,8 @@ const stopCamera = () => {
         uploadSessionData(); 
         clearInterval(uploadInterval);
     }
+    // [NEW] Stop Timer
+    if (durationInterval) clearInterval(durationInterval);
     if (camera) camera.stop();
 };
 
@@ -291,95 +280,92 @@ onUnmounted(() => stopCamera());
 
 <template>
     <AuthenticatedLayout>
-        <div class="py-12 bg-slate-900 min-h-screen font-sans selection:bg-indigo-500 selection:text-white">
+        <div class="py-6 md:py-12 bg-slate-900 min-h-screen font-sans selection:bg-indigo-500 selection:text-white">
             <div class="max-w-6xl mx-auto flex flex-col items-center">
                 
-                <div class="w-full flex justify-between items-end mb-6 px-4">
+                <div class="w-full flex justify-between items-end mb-4 md:mb-6 px-4">
                     <div>
-                        <h2 class="text-3xl font-black text-white tracking-tighter">
+                        <h2 class="text-2xl md:text-3xl font-black text-white tracking-tighter">
                             ERGO<span class="text-indigo-500">VISION</span>
                         </h2>
-                        <p class="text-slate-400 text-sm font-mono uppercase tracking-widest">
-                            Real-Time Postural Inference Engine
+                        <p class="text-slate-400 text-[10px] md:text-sm font-mono uppercase tracking-widest">
+                            AI Posture Engine
                         </p>
                     </div>
                     
-                    <div class="flex items-center gap-3">
-                        <div class="h-3 w-3 rounded-full animate-pulse" 
-                             :class="isCalibrated ? 'bg-emerald-500' : (isCameraOn ? 'bg-amber-500' : 'bg-red-500')">
+                    <div class="flex flex-col items-end gap-1">
+                        <div v-if="isCameraOn" class="font-mono text-xl md:text-2xl font-bold text-white tabular-nums tracking-widest">
+                            {{ formattedDuration }}
                         </div>
-                        <span class="text-white font-mono text-xs">
-                            {{ isCalibrated ? 'SYSTEM ACTIVE' : (isCameraOn ? 'STANDBY' : 'OFFLINE') }}
-                        </span>
+                        <div class="flex items-center gap-2">
+                            <div class="h-2 w-2 md:h-3 md:w-3 rounded-full animate-pulse" 
+                                 :class="isCalibrated ? 'bg-emerald-500' : (isCameraOn ? 'bg-amber-500' : 'bg-red-500')">
+                            </div>
+                            <span class="text-white font-mono text-[10px] md:text-xs">
+                                {{ isCalibrated ? 'ACTIVE' : (isCameraOn ? 'STANDBY' : 'OFFLINE') }}
+                            </span>
+                        </div>
                     </div>
                 </div>
 
-                <div class="relative bg-black rounded-3xl overflow-hidden transition-all duration-500 group"
+                <div class="relative w-full max-w-4xl aspect-video bg-black rounded-2xl md:rounded-3xl overflow-hidden shadow-2xl transition-all duration-500 group mx-4"
                      :class="[
-                        isCalibrated && isSlouching ? 'shadow-[0_0_50px_rgba(239,68,68,0.6)] ring-4 ring-red-500' : 
-                        isCalibrated ? 'shadow-[0_0_50px_rgba(16,185,129,0.4)] ring-4 ring-emerald-500' :
-                        isLocking ? 'ring-4 ring-amber-400 shadow-[0_0_50px_rgba(251,191,36,0.4)]' :
-                        'shadow-2xl ring-1 ring-slate-700'
-                      ]"
-                      style="width: 720px; height: 540px;">
+                        isCalibrated && isSlouching ? 'shadow-red-900/40 ring-2 ring-red-500' : 
+                        isCalibrated ? 'shadow-emerald-900/40 ring-2 ring-emerald-500' :
+                        isLocking ? 'ring-2 ring-amber-400' :
+                        'ring-1 ring-slate-700'
+                      ]">
                     
                     <video ref="videoRef" class="w-full h-full object-cover transform scale-x-[-1]" autoplay playsinline></video>
 
-                    <div v-if="isCameraOn && !isDetected" class="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
-                        <div class="bg-black/40 p-4 rounded-xl backdrop-blur-sm text-center">
-                            <svg class="animate-spin h-10 w-10 text-indigo-500 mx-auto mb-2" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                                <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
-                                <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                            </svg>
-                            <p class="text-white font-mono text-xs uppercase tracking-widest">Detecting Body...</p>
-                            <p class="text-indigo-400 text-[10px] mt-1">{{ statusMessage }}</p>
-                        </div>
+                    <div v-if="isCameraOn && !isDetected" class="absolute inset-0 flex flex-col items-center justify-center pointer-events-none bg-black/50 backdrop-blur-sm">
+                        <svg class="animate-spin h-8 w-8 text-indigo-500 mb-2" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                            <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                            <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                        </svg>
+                        <p class="text-white font-mono text-[10px] uppercase tracking-widest">Detecting...</p>
                     </div>
 
                     <div v-if="isCameraOn && isDetected && !isCalibrated && !isLocking" 
-                         class="absolute inset-0 flex flex-col items-center justify-center bg-slate-900/40 z-30 backdrop-blur-[2px]">
-                        
-                        <div class="bg-black/80 p-8 rounded-3xl border border-white/10 text-center max-w-md shadow-2xl">
-                            <div class="text-5xl mb-4">🧘</div>
-                            <h3 class="text-white font-bold text-2xl mb-2">Calibration Required</h3>
-                            <p class="text-slate-400 text-sm mb-6 leading-relaxed">
-                                Sit upright in your "Ideal" posture.<br>
-                                Click below to start the 5-second lock.
+                         class="absolute inset-0 flex flex-col items-center justify-center bg-slate-900/60 z-30 backdrop-blur-sm p-4">
+                        <div class="text-center max-w-sm">
+                            <div class="text-4xl mb-2">🧘</div>
+                            <h3 class="text-white font-bold text-xl mb-1">Calibration</h3>
+                            <p class="text-slate-300 text-xs mb-4">
+                                Sit straight. Click start. Hold for 5s.
                             </p>
                             <button @click="triggerCalibration" 
-                                    class="w-full py-4 bg-gradient-to-r from-indigo-600 to-indigo-500 hover:from-indigo-500 hover:to-indigo-400 text-white font-bold rounded-xl shadow-lg transition-all flex items-center justify-center gap-2 group">
-                                <span>START 5s CALIBRATION</span>
+                                    class="w-full py-3 bg-indigo-600 hover:bg-indigo-500 text-white font-bold rounded-xl shadow-lg transition-all flex items-center justify-center gap-2">
+                                <span>START 5s LOCK</span>
                             </button>
                         </div>
                     </div>
 
-                    <div v-if="isLocking" class="absolute inset-0 flex flex-col items-center justify-center bg-black/70 z-50 backdrop-blur-md">
-                        <div class="relative">
-                            <h2 class="text-[12rem] leading-none font-black text-white drop-shadow-[0_0_30px_rgba(251,191,36,0.8)] font-variant-numeric tabular-nums">
-                                {{ calibrationCountdown }}
-                            </h2>
-                            <p class="text-amber-400 font-bold uppercase tracking-[0.5em] text-sm animate-pulse text-center mt-4">Stay Rigid</p>
-                        </div>
+                    <div v-if="isLocking" class="absolute inset-0 flex flex-col items-center justify-center bg-black/80 z-50 backdrop-blur-md">
+                        <h2 class="text-9xl font-black text-white font-variant-numeric tabular-nums">
+                            {{ calibrationCountdown }}
+                        </h2>
+                        <p class="text-amber-400 font-bold uppercase tracking-widest text-xs animate-pulse mt-2">Don't Move</p>
                     </div>
 
-                    <div v-if="isCalibrated" class="absolute inset-0 z-40 pointer-events-none p-6 flex flex-col justify-between">
+                    <div v-if="isCalibrated" class="absolute inset-0 z-40 pointer-events-none p-4 md:p-6 flex flex-col justify-between">
                         
                         <div class="flex justify-between items-start">
-                            <div class="bg-black/60 backdrop-blur-md p-4 rounded-2xl border border-white/10 shadow-xl">
-                                <div class="text-[10px] text-slate-400 uppercase tracking-widest font-bold mb-1">Posture Efficiency</div>
-                                <div class="text-5xl font-black tracking-tight" 
+                            <div class="bg-black/60 backdrop-blur-md p-3 rounded-xl border border-white/10 shadow-lg">
+                                <div class="text-[8px] text-slate-400 uppercase tracking-widest font-bold mb-0.5">Score</div>
+                                <div class="text-3xl md:text-4xl font-black tracking-tight leading-none" 
                                      :class="currentScore > 85 ? 'text-emerald-400' : (currentScore > 70 ? 'text-amber-400' : 'text-red-500')">
-                                    {{ currentScore }}<span class="text-2xl align-top opacity-60">%</span>
+                                    {{ currentScore }}
                                 </div>
                             </div>
 
-                            <div class="bg-black/60 backdrop-blur-md px-6 py-3 rounded-full border border-white/10 shadow-xl">
-                                <div class="flex items-center gap-3">
-                                    <span class="relative flex h-3 w-3">
+                            <div class="bg-black/60 backdrop-blur-md px-4 py-2 rounded-full border border-white/10 shadow-lg">
+                                <div class="flex items-center gap-2">
+                                    <span class="relative flex h-2 w-2">
                                       <span v-if="isSlouching" class="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
-                                      <span class="relative inline-flex rounded-full h-3 w-3" :class="isSlouching ? 'bg-red-500' : 'bg-emerald-500'"></span>
+                                      <span class="relative inline-flex rounded-full h-2 w-2" :class="isSlouching ? 'bg-red-500' : 'bg-emerald-500'"></span>
                                     </span>
-                                    <span class="font-bold uppercase tracking-wider text-sm" 
+                                    <span class="font-bold uppercase tracking-wider text-[10px] md:text-xs" 
                                           :class="isSlouching ? 'text-red-400' : 'text-emerald-400'">
                                         {{ statusMessage }}
                                     </span>
@@ -387,32 +373,30 @@ onUnmounted(() => stopCamera());
                             </div>
                         </div>
 
-                        <div class="flex justify-end items-end opacity-50 hover:opacity-100 transition-opacity">
-                            <div class="bg-black/80 backdrop-blur-md p-3 rounded-xl border border-white/10 text-right">
-                                <div class="text-[9px] text-slate-500 uppercase tracking-widest font-mono mb-1">Real-Time Telemetry</div>
-                                <div class="font-mono text-xs text-indigo-300">
-                                    NCK: {{ angles.neck }}° | BCK: {{ angles.back }}°
+                        <div class="flex justify-end items-end opacity-60">
+                            <div class="bg-black/80 backdrop-blur-md p-2 rounded-lg border border-white/10 text-right">
+                                <div class="font-mono text-[10px] text-indigo-300">
+                                    N:{{ angles.neck }}° B:{{ angles.back }}°
                                 </div>
                             </div>
                         </div>
                     </div>
-
                 </div>
 
-                <div class="mt-8 grid grid-cols-1 gap-4 w-full max-w-md">
+                <div class="mt-6 md:mt-8 w-full max-w-md px-4">
                     <button v-if="!isCameraOn" @click="startCamera" 
-                            class="w-full py-5 bg-indigo-600 hover:bg-indigo-500 text-white font-black text-lg rounded-2xl shadow-lg shadow-indigo-500/20 transition-all hover:translate-y-[-2px] uppercase tracking-widest">
-                        Initialize Camera
+                            class="w-full py-4 bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-lg rounded-2xl shadow-lg transition-all uppercase tracking-widest">
+                        Start Camera
                     </button>
 
-                    <div v-else class="flex gap-4">
+                    <div v-else class="flex gap-3">
                         <button @click="stopCamera" 
-                                class="flex-1 py-4 bg-slate-800 hover:bg-red-600 hover:text-white text-slate-200 font-bold rounded-xl transition-colors shadow-lg border border-slate-700 uppercase tracking-wider text-sm">
-                            End Session & Save
+                                class="flex-1 py-3 bg-slate-800 hover:bg-red-600 hover:text-white text-slate-200 font-bold rounded-xl transition-colors shadow-lg border border-slate-700 uppercase tracking-wider text-xs md:text-sm">
+                            End Session
                         </button>
                         
                         <button v-if="isCalibrated" @click="triggerCalibration" 
-                                class="px-6 py-4 bg-slate-800 hover:bg-slate-700 text-indigo-400 hover:text-indigo-300 font-bold rounded-xl transition-colors shadow-lg border border-slate-700 uppercase tracking-wider text-sm"
+                                class="px-4 py-3 bg-slate-800 hover:bg-slate-700 text-indigo-400 hover:text-indigo-300 font-bold rounded-xl transition-colors shadow-lg border border-slate-700"
                                 title="Reset Baseline">
                             <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
