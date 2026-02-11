@@ -10,35 +10,46 @@ use Carbon\Carbon;
 
 class PostureChunkController extends Controller
 {
-    /**
-     * Dashboard view with Date filtering.
-     */
     public function index(Request $request)
     {
-        $user = Auth::user();
-        $todayPHT = Carbon::now('Asia/Manila')->toDateString();
-        $selectedDate = $request->input('date', $todayPHT);
+        // 1. Get Date (Default to Today in Philippines Time)
+        $date = $request->input('date') ?: Carbon::now('Asia/Manila')->format('Y-m-d');
 
-        $chunks = $user->postureChunks()
-            ->whereDate('created_at', $selectedDate)
-            ->latest()
+        // 2. Fetch Data for that specific date
+        $chunks = PostureChunk::where('user_id', Auth::id())
+            ->whereDate('created_at', $date)
+            ->orderBy('created_at', 'desc')
             ->get();
 
-        // Calculate Total Duration in Minutes for the Stat Card
-        $totalSeconds = $chunks->sum('duration_seconds');
-        $hours = floor($totalSeconds / 3600);
-        $minutes = floor(($totalSeconds % 3600) / 60);
-        $formattedDuration = $hours > 0 ? "{$hours}h {$minutes}m" : "{$minutes}m";
+        // 3. Calculate Stats
+        $totalChunks = $chunks->count();
+        $averageScore = $totalChunks > 0 ? round($chunks->avg('score')) : 0;
+        $totalAlerts = $chunks->sum('alert_count');
+        
+        // --- NEW: Calculate Total Duration ---
+        // Sum the seconds from the database
+        $totalSeconds = $chunks->sum('duration_seconds'); 
+        
+        // Format seconds into "1h 30m" or "45m"
+        $dt = Carbon::now()->startOfDay()->addSeconds($totalSeconds);
+        $totalDurationString = $totalSeconds >= 3600 
+            ? $dt->format('H\h i\m') 
+            : $dt->format('i\m s\s');
+
+        // Calculate Slouch Time (Total seconds spent slouching)
+        $totalSlouchSeconds = $chunks->sum('slouch_duration');
 
         return Inertia::render('Dashboard', [
             'postureChunks' => $chunks,
-            'filters' => ['date' => $selectedDate],
             'summaryStats' => [
-                'averageScore' => $chunks->count() > 0 ? round($chunks->avg('score')) : 0,
-                'totalAlerts'  => (int) $chunks->sum('alert_count'),
-                'totalSlouch'  => (int) $chunks->sum('slouch_duration'), // In seconds
-                'totalDuration'=> $formattedDuration, // NEW METRIC
-                'totalLogs'    => $chunks->count(),
+                'averageScore' => $averageScore,
+                'totalAlerts' => $totalAlerts,
+                'totalSlouch' => $totalSlouchSeconds,
+                'totalDuration' => $totalDurationString, // Passing the formatted string
+                'totalLogs' => $totalChunks,
+            ],
+            'filters' => [
+                'date' => $date
             ]
         ]);
     }

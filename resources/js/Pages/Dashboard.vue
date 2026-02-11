@@ -15,7 +15,7 @@ const props = defineProps({
             averageScore: 0,
             totalAlerts: 0,
             totalSlouch: 0,
-            totalDuration: '0m', // Added default for new metric
+            totalDuration: '0m 0s', // Default value
             totalLogs: 0
         })
     },
@@ -28,7 +28,6 @@ const user = computed(() => page.props.auth?.user || { name: 'User' });
 // --- 1. Date Filter Logic ---
 const selectedDate = ref(props.filters.date);
 
-// Watch for date changes and fetch new data from Laravel
 watch(selectedDate, (newDate) => {
     router.get('/dashboard', { date: newDate }, {
         preserveState: true,
@@ -37,7 +36,7 @@ watch(selectedDate, (newDate) => {
     });
 });
 
-// --- 2. PHT Time Formatting Helper ---
+// --- 2. Time Formatting Helper ---
 const formatPH = (dateString, type = 'full') => {
     const options = type === 'time' 
         ? { hour: '2-digit', minute: '2-digit', hour12: true, timeZone: 'Asia/Manila' }
@@ -46,9 +45,9 @@ const formatPH = (dateString, type = 'full') => {
     return new Date(dateString).toLocaleString('en-PH', options);
 };
 
-// --- 3. New Duration Formatter (Seconds -> M:SS) ---
+// --- 3. Duration Formatter (For Table) ---
 const formatDuration = (seconds) => {
-    if (!seconds) return '30s'; // Default fallback
+    if (!seconds) return '30s'; 
     const m = Math.floor(seconds / 60);
     const s = seconds % 60;
     return m > 0 ? `${m}m ${s}s` : `${s}s`;
@@ -58,7 +57,6 @@ const formatDuration = (seconds) => {
 const chartData = computed(() => {
     if (!props.postureChunks || props.postureChunks.length === 0) return null;
 
-    // Clone and reverse so graph goes Left(Old) -> Right(New)
     const chunks = [...props.postureChunks].reverse();
     const labels = chunks.map(chunk => formatPH(chunk.created_at, 'time'));
     const scoreData = chunks.map(chunk => chunk.score);
@@ -67,32 +65,39 @@ const chartData = computed(() => {
         labels: labels,
         datasets: [{
             label: 'Posture Efficiency %',
-            backgroundColor: 'rgba(99, 102, 241, 0.1)',
+            backgroundColor: (ctx) => {
+                const gradient = ctx.chart.ctx.createLinearGradient(0, 0, 0, 300);
+                gradient.addColorStop(0, 'rgba(99, 102, 241, 0.4)');
+                gradient.addColorStop(1, 'rgba(99, 102, 241, 0.0)');
+                return gradient;
+            },
             borderColor: '#6366f1',
+            borderWidth: 2,
             data: scoreData,
             fill: true,
             tension: 0.4,
-            pointRadius: 4
+            pointRadius: 4,
+            pointBackgroundColor: '#1e293b',
+            pointBorderColor: '#6366f1',
+            pointBorderWidth: 2
         }]
     };
 });
 
-// --- 5. Action Handlers ---
+// --- 5. Actions ---
 const deleteEntry = (id) => {
     if (!confirm('Permanently delete this session log?')) return;
-
     router.delete(`/posture-chunks/${id}`, {
         preserveScroll: true,
         onSuccess: () => console.log('Entry deleted')
     });
 };
 
-// Dev Tool: create a fake entry to test the table
 const testCreateChunk = () => {
     router.post('/posture-chunks', {
         score: Math.floor(Math.random() * 20 + 75),
         slouch_duration: Math.floor(Math.random() * 10),
-        duration_seconds: 30, // Default test duration
+        duration_seconds: 30,
         alert_count: 0
     }, { preserveScroll: true });
 };
@@ -124,9 +129,8 @@ const testCreateChunk = () => {
                                 class="bg-transparent border-none p-0 text-sm font-bold text-white focus:ring-0 cursor-pointer w-32"
                             >
                         </div>
-
                         <button @click="testCreateChunk" 
-                                class="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold rounded-xl transition-all shadow-lg shadow-indigo-500/20 uppercase tracking-wider">
+                                class="hidden md:block px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold rounded-xl transition-all shadow-lg shadow-indigo-500/20 uppercase tracking-wider">
                             + Add Test
                         </button>
                     </div>
@@ -134,7 +138,7 @@ const testCreateChunk = () => {
 
                 <div class="grid grid-cols-1 md:grid-cols-4 gap-6">
                     
-                    <div class="bg-slate-800/50 backdrop-blur-sm p-6 rounded-3xl border border-slate-700 shadow-xl relative overflow-hidden group">
+                    <div class="bg-slate-800/50 backdrop-blur-sm p-6 rounded-3xl border border-slate-700 shadow-xl relative overflow-hidden group hover:border-indigo-500/30 transition-colors">
                         <div class="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition">
                             <svg xmlns="http://www.w3.org/2000/svg" class="h-16 w-16 text-indigo-500" fill="currentColor" viewBox="0 0 20 20"><path d="M2 11a1 1 0 011-1h2a1 1 0 011 1v5a1 1 0 01-1 1H3a1 1 0 01-1-1v-5zM8 7a1 1 0 011-1h2a1 1 0 011 1v9a1 1 0 01-1 1H9a1 1 0 01-1-1V7zM14 4a1 1 0 011-1h2a1 1 0 011 1v12a1 1 0 01-1 1h-2a1 1 0 01-1-1V4z" /></svg>
                         </div>
@@ -142,33 +146,34 @@ const testCreateChunk = () => {
                         <p class="text-4xl font-black text-white">{{ summaryStats.averageScore }}<span class="text-lg text-slate-500">%</span></p>
                     </div>
 
-                    <div class="bg-slate-800/50 backdrop-blur-sm p-6 rounded-3xl border border-slate-700 shadow-xl relative overflow-hidden group">
+                    <div class="bg-slate-800/50 backdrop-blur-sm p-6 rounded-3xl border border-slate-700 shadow-xl relative overflow-hidden group hover:border-emerald-500/30 transition-colors">
                         <div class="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition">
-                            <svg xmlns="http://www.w3.org/2000/svg" class="h-16 w-16 text-emerald-500" fill="currentColor"><path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm1-12a1 1 0 10-2 0v4a1 1 0 00.293.707l2.828 2.829a1 1 0 101.415-1.415L11 9.586V6z" clip-rule="evenodd" /></svg>
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-16 w-16 text-emerald-500" fill="currentColor" viewBox="0 0 20 20">
+                                <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm1-12a1 1 0 10-2 0v4a1 1 0 00.293.707l2.828 2.829a1 1 0 101.415-1.415L11 9.586V6z" clip-rule="evenodd" />
+                            </svg>
                         </div>
                         <p class="text-[10px] font-bold text-emerald-400 uppercase tracking-widest mb-1">Total Time</p>
                         <p class="text-4xl font-black text-white">{{ summaryStats.totalDuration }}</p>
                     </div>
 
-                    <div class="bg-slate-800/50 backdrop-blur-sm p-6 rounded-3xl border border-slate-700 shadow-xl relative overflow-hidden group">
+                    <div class="bg-slate-800/50 backdrop-blur-sm p-6 rounded-3xl border border-slate-700 shadow-xl relative overflow-hidden group hover:border-amber-500/30 transition-colors">
                         <div class="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition">
                             <svg xmlns="http://www.w3.org/2000/svg" class="h-16 w-16 text-amber-500" fill="currentColor"><path fill-rule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clip-rule="evenodd" /></svg>
                         </div>
                         <p class="text-[10px] font-bold text-amber-400 uppercase tracking-widest mb-1">Slouch Time</p>
                         <p class="text-4xl font-black text-white">
-                            {{ Math.round(summaryStats.totalSlouch / 60) }}<span class="text-lg text-slate-500">m</span> 
+                            {{ Math.floor(summaryStats.totalSlouch / 60) }}<span class="text-lg text-slate-500">m</span> 
                             {{ summaryStats.totalSlouch % 60 }}<span class="text-lg text-slate-500">s</span>
                         </p>
                     </div>
 
-                    <div class="bg-slate-800/50 backdrop-blur-sm p-6 rounded-3xl border border-slate-700 shadow-xl relative overflow-hidden group">
+                    <div class="bg-slate-800/50 backdrop-blur-sm p-6 rounded-3xl border border-slate-700 shadow-xl relative overflow-hidden group hover:border-red-500/30 transition-colors">
                         <div class="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition">
                             <svg xmlns="http://www.w3.org/2000/svg" class="h-16 w-16 text-red-500" fill="currentColor"><path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clip-rule="evenodd" /></svg>
                         </div>
                         <p class="text-[10px] font-bold text-red-400 uppercase tracking-widest mb-1">Corrections</p>
                         <p class="text-4xl font-black text-white">{{ summaryStats.totalAlerts }}</p>
                     </div>
-
                 </div>
 
                 <div class="bg-slate-800 rounded-3xl p-8 border border-slate-700 shadow-2xl">
@@ -188,12 +193,13 @@ const testCreateChunk = () => {
                     </div>
                 </div>
 
-                <div class="bg-slate-800 shadow-xl rounded-3xl overflow-hidden border border-slate-700">
+                <div class="bg-slate-800 shadow-xl rounded-3xl overflow-hidden border border-slate-700 mb-12">
                     <table class="w-full text-sm text-left">
                         <thead class="bg-slate-900/50 text-slate-400 font-bold uppercase text-[10px] tracking-widest border-b border-slate-700">
                             <tr>
                                 <th class="px-8 py-5">Timestamp</th>
-                                <th class="px-8 py-5">Duration</th> <th class="px-8 py-5 text-center">Score</th>
+                                <th class="px-8 py-5">Duration</th> 
+                                <th class="px-8 py-5 text-center">Score</th>
                                 <th class="px-8 py-5 text-center">Slouching</th>
                                 <th class="px-8 py-5 text-center">Alerts</th>
                                 <th class="px-8 py-5 text-right">Actions</th>

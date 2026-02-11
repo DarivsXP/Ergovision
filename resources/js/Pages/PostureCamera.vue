@@ -4,10 +4,21 @@ import { ref, onUnmounted, onMounted } from 'vue';
 import { router } from '@inertiajs/vue3'; 
 import axios from 'axios';
 
-// --- Configuration ---
-// If the ENV variable is missing, fallback to your hardcoded Render URL
-const AI_ENDPOINT = import.meta.env.VITE_AI_ENDPOINT || 'https://ergovision-ai.onrender.com/predict';
-const AI_BASE_URL = 'https://ergovision-ai.onrender.com/'; // For waking up the server
+// --- SMART CONFIGURATION ---
+// Automatically detect if we are running locally or on the live web
+const isLocal = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+
+// If Local -> Use Local Python (127.0.0.1:5000)
+// If Live  -> Use Render (ergovision-ai.onrender.com)
+const AI_ENDPOINT = isLocal 
+    ? 'http://127.0.0.1:5000/predict' 
+    : 'https://ergovision-ai.onrender.com/predict';
+
+const AI_BASE_URL = isLocal 
+    ? 'http://127.0.0.1:5000/' 
+    : 'https://ergovision-ai.onrender.com/';
+
+console.log(`Running in ${isLocal ? 'LOCAL' : 'LIVE'} mode. Connecting to: ${AI_ENDPOINT}`);
 
 // --- State Variables ---
 const videoRef = ref(null);
