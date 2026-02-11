@@ -4,6 +4,11 @@ import { ref, onUnmounted, onMounted } from 'vue';
 import { router } from '@inertiajs/vue3'; 
 import axios from 'axios';
 
+// --- Configuration ---
+// If the ENV variable is missing, fallback to your hardcoded Render URL
+const AI_ENDPOINT = import.meta.env.VITE_AI_ENDPOINT || 'https://ergovision-ai.onrender.com/predict';
+const AI_BASE_URL = 'https://ergovision-ai.onrender.com/'; // For waking up the server
+
 // --- State Variables ---
 const videoRef = ref(null);
 const isCameraOn = ref(false); 
@@ -13,7 +18,7 @@ const isLocking = ref(false);
 const calibrationCountdown = ref(0);
 const currentScore = ref(100);
 const isSlouching = ref(false);
-const statusMessage = ref("Waiting for Calibration...");
+const statusMessage = ref("Initializing...");
 
 // Posture Reference Data
 const angles = ref({ neck: 0, back: 0 });
@@ -36,12 +41,29 @@ let lastNotificationTime = 0;
 
 const sessionData = ref({ scores: [], slouchFrames: 0, totalFrames: 0, alerts: 0 });
 
+// --- 0. The "Wake Up" Protocol ---
+const wakeUpServer = async () => {
+    try {
+        console.log("Pinging AI Server to wake up...");
+        await axios.get(AI_BASE_URL, { timeout: 3000 });
+        console.log("AI Server is AWAKE.");
+        statusMessage.value = "AI Ready";
+    } catch (e) {
+        console.log("AI Server might be waking up (Cold Start)...");
+        statusMessage.value = "Waking up AI...";
+    }
+};
+
 onMounted(() => {
+    // 1. Ask for Notification Permissions
     if ("Notification" in window && Notification.permission !== "granted") {
         Notification.requestPermission();
     }
 
-    // Initialize MediaPipe
+    // 2. Trigger Server Wake Up immediately
+    wakeUpServer();
+
+    // 3. Initialize MediaPipe
     if (window.Pose) {
         pose = new window.Pose({
             locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/pose/${file}`,
@@ -63,28 +85,28 @@ onMounted(() => {
 const uploadSessionData = () => {
     if (sessionData.value.totalFrames === 0) return;
 
-    // 1. Calculate Actual Duration
+    // Calculate Actual Duration
     const now = Date.now();
-    // Duration in seconds (Max 30, but simpler to calculate exact diff)
     const actualDuration = Math.round((now - chunkStartTime) / 1000); 
     
-    // Reset timer for NEXT chunk immediately
+    // Reset timer for NEXT chunk
     chunkStartTime = now;
 
     const count = sessionData.value.scores.length || 1;
     const avgScore = Math.round(sessionData.value.scores.reduce((a, b) => a + b, 0) / count);
     
-    // Recalculate slouch duration based on real time, not just frames
+    // Recalculate slouch duration
     const slouchRatio = sessionData.value.slouchFrames / sessionData.value.totalFrames;
     const slouchSecs = Math.round(slouchRatio * actualDuration);
 
     const payload = {
         score: avgScore || 100,
         slouch_duration: slouchSecs || 0,
-        duration_seconds: actualDuration || 30, // Send the new metric
+        duration_seconds: actualDuration || 30,
         alert_count: sessionData.value.alerts || 0
     };
 
+    // Since you are on the same domain (ergovision.online), relative path works perfectly
     router.post('/posture-chunks', payload, {
         preserveScroll: true,
         preserveState: true,
@@ -135,7 +157,6 @@ const handleAdaptiveFeedback = (slouching) => {
 const triggerCalibration = () => {
     if (isLocking.value || isCalibrated.value) return;
     
-    // Reset buffer
     calibrationBuffer.value = [];
     isLocking.value = true;
     calibrationCountdown.value = 5;
@@ -151,20 +172,15 @@ const triggerCalibration = () => {
 };
 
 const lockNeutralPosition = () => {
-    // If buffer is empty, it means AI wasn't reading data during the countdown
+    // Safety: If buffer is empty, AI didn't see anything
     if (calibrationBuffer.value.length < 1) {
         isLocking.value = false;
         alert("Calibration Failed: AI could not see you clearly. Please ensure good lighting and try again.");
         statusMessage.value = "Calibration Failed";
-
-        chunkStartTime = Date.now(); 
-    
-        if (uploadInterval) clearInterval(uploadInterval);
-        uploadInterval = setInterval(uploadSessionData, 30000);
         return;
     }
     
-    // Average buffer for rigid baseline
+    // Average buffer for baseline
     myIdealBack.value = calibrationBuffer.value.reduce((a, b) => a + b.back, 0) / calibrationBuffer.value.length;
     myIdealNeck.value = calibrationBuffer.value.reduce((a, b) => a + b.neck, 0) / calibrationBuffer.value.length;
     
@@ -174,6 +190,7 @@ const lockNeutralPosition = () => {
     successSound.play();
     
     // START RECORDING
+    chunkStartTime = Date.now(); 
     if (uploadInterval) clearInterval(uploadInterval);
     uploadInterval = setInterval(uploadSessionData, 30000);
 };
@@ -182,70 +199,58 @@ const lockNeutralPosition = () => {
 const onResults = async (results) => {
     const now = Date.now();
     
-    // 1. Safety Check: Do we have a body detected?
+    // Safety Check
     if (!results.poseLandmarks || results.poseLandmarks.length < 25) {
         isDetected.value = false;
         return;
     }
     isDetected.value = true;
 
-    // 2. Throttling: Only send a frame every 200ms (5 FPS) to save bandwidth
+    // Throttling (200ms = 5 FPS)
     if (now - lastProcessTime < 200) return;
     lastProcessTime = now;
 
     try {
-        // --- THE FIX IS HERE ---
-        // We use the environment variable. 
-        // Locally it is 'http://127.0.0.1:5000...'
-        // On Amezmo it is 'https://ergovision-ai.onrender.com...'
-        const res = await axios.post(import.meta.env.VITE_AI_ENDPOINT, {
+        // Send to AI Server
+        const res = await axios.post(AI_ENDPOINT, {
             landmarks: results.poseLandmarks,
             ideal_back: myIdealBack.value,
             ideal_neck: myIdealNeck.value
         });
 
-        // 3. Update Angles for UI
+        // Update UI
         angles.value = res.data.angles;
 
-        // 4. Calibration Buffer Logic (during the "Locking" phase)
+        // Calibration Phase
         if (isLocking.value) {
             calibrationBuffer.value.push(res.data.angles);
             if (calibrationBuffer.value.length > 15) calibrationBuffer.value.shift();
         }
 
-        // 5. Main Detection Logic (after calibration)
+        // Monitoring Phase
         if (isCalibrated.value) {
             currentScore.value = res.data.score;
             
-            // A. AI Opinion (The Physician's Brain)
             const aiSaysSlouch = res.data.label === 1;
-
-            // B. Score Opinion (The Safety Net)
-            // If score drops below 75, we consider it a slouch regardless of AI
             const scoreIsFailing = currentScore.value < 75;
 
-            // C. Combined Decision
             isSlouching.value = aiSaysSlouch || scoreIsFailing;
             
-            // D. Provide Feedback (Audio/Visual)
             handleAdaptiveFeedback(isSlouching.value);
 
-            // E. Record Statistics
             sessionData.value.scores.push(res.data.score);
             sessionData.value.totalFrames++;
             if (isSlouching.value) sessionData.value.slouchFrames++;
         }
     } catch (err) { 
-        console.error("AI Server Error: Check if Python server is running."); 
+        console.error("AI Server Error (might be waking up):", err); 
     }
 };
 
 const startCamera = async () => {
     try {
-        // Explicitly request camera access first to trigger browser prompt
         const stream = await navigator.mediaDevices.getUserMedia({ video: true });
         
-        // If successful, start MediaPipe
         camera = new window.Camera(videoRef.value, {
             onFrame: async () => { if (pose) await pose.send({ image: videoRef.value }); },
             width: 640, height: 480
@@ -254,7 +259,7 @@ const startCamera = async () => {
         isCameraOn.value = true;
         isCalibrated.value = false;
     } catch (e) {
-        alert("Camera Permission Denied or Not Found.");
+        alert("Camera Permission Denied. Please allow camera access in your browser settings.");
         console.error(e);
     }
 };
@@ -298,25 +303,25 @@ onUnmounted(() => stopCamera());
                     </div>
                 </div>
 
-                
                 <div class="relative bg-black rounded-3xl overflow-hidden transition-all duration-500 group"
                      :class="[
                         isCalibrated && isSlouching ? 'shadow-[0_0_50px_rgba(239,68,68,0.6)] ring-4 ring-red-500' : 
                         isCalibrated ? 'shadow-[0_0_50px_rgba(16,185,129,0.4)] ring-4 ring-emerald-500' :
                         isLocking ? 'ring-4 ring-amber-400 shadow-[0_0_50px_rgba(251,191,36,0.4)]' :
                         'shadow-2xl ring-1 ring-slate-700'
-                     ]"
-                     style="width: 720px; height: 540px;">
+                      ]"
+                      style="width: 720px; height: 540px;">
                     
                     <video ref="videoRef" class="w-full h-full object-cover transform scale-x-[-1]" autoplay playsinline></video>
 
                     <div v-if="isCameraOn && !isDetected" class="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
-                        <div class="bg-black/40 p-4 rounded-xl backdrop-blur-sm">
+                        <div class="bg-black/40 p-4 rounded-xl backdrop-blur-sm text-center">
                             <svg class="animate-spin h-10 w-10 text-indigo-500 mx-auto mb-2" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
                                 <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
                                 <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
                             </svg>
                             <p class="text-white font-mono text-xs uppercase tracking-widest">Detecting Body...</p>
+                            <p class="text-indigo-400 text-[10px] mt-1">{{ statusMessage }}</p>
                         </div>
                     </div>
 
