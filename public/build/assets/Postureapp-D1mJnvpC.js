@@ -1,1 +1,0 @@
-import{F as r,g as t,b as s,t as o,d as n,I as p,o as u}from"./app-ClI-o9Gm.js";const i={__name:"Postureapp",setup(l){const a=r().props.auth.user;return(m,e)=>(u(),t(p,null,[e[0]||(e[0]=s("h1",null,"This is my secure posture app!",-1)),s("p",null,"Welcome, "+o(n(a).name),1)],64))}};export{i as default};
