@@ -5,6 +5,18 @@ import InputLabel from '@/Components/InputLabel.vue';
 import PrimaryButton from '@/Components/PrimaryButton.vue';
 import TextInput from '@/Components/TextInput.vue';
 import { Head, Link, useForm } from '@inertiajs/vue3';
+import { useToast } from '@/Composables/useToast';
+
+const toast = useToast();
+
+const submit = () => {
+    form.post(route('login'), {
+        onFinish: () => form.reset('password'),
+        onError: (errors) => {
+            toast.error("Invalid email or password.", "Login Failed");
+        }
+    });
+};
 
 defineProps({
     canResetPassword: {
@@ -21,11 +33,6 @@ const form = useForm({
     remember: false,
 });
 
-const submit = () => {
-    form.post(route('login'), {
-        onFinish: () => form.reset('password'),
-    });
-};
 </script>
 
 <template>

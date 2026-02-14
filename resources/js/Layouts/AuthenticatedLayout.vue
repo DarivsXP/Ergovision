@@ -6,12 +6,15 @@ import DropdownLink from '@/Components/DropdownLink.vue';
 import NavLink from '@/Components/NavLink.vue';
 import ResponsiveNavLink from '@/Components/ResponsiveNavLink.vue';
 import { Link } from '@inertiajs/vue3';
+import ToastList from '@/Components/ToastList.vue'; // <--- Added Toast Component
 
 const showingNavigationDropdown = ref(false);
 </script>
 
 <template>
     <div>
+        <ToastList />
+
         <div class="min-h-screen bg-slate-900">
             
             <nav class="sticky top-0 z-50 border-b border-white/10 bg-slate-900/80 backdrop-blur-md transition-all duration-300">
