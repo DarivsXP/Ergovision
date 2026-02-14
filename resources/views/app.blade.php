@@ -5,11 +5,15 @@
         <meta name="viewport" content="width=device-width, initial-scale=1">
 
         <title inertia>{{ config('app.name', 'Ergovision AI') }}</title>
+        
+        <link rel="icon" href="{{ asset('favicon.ico') }}">
 
         <meta name="description" content="Improve your posture with real-time AI correction. Ergovision uses your webcam to detect slouching and protect your spinal health. No equipment needed.">
         <meta name="keywords" content="posture, AI, health, ergonomics, webcam, spine health, sitting correction, ergovision">
         <meta name="author" content="Ergovision Team">
-        <meta name="theme-color" content="#4f46e5"> <meta property="og:type" content="website">
+        <meta name="theme-color" content="#4f46e5"> 
+        
+        <meta property="og:type" content="website">
         <meta property="og:url" content="{{ url('/') }}">
         <meta property="og:title" content="Ergovision AI - Real-Time Posture Correction">
         <meta property="og:description" content="Stop slouching today. Ergovision monitors your posture in real-time and alerts you when to sit up straight.">
