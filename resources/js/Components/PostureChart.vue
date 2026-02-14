@@ -27,20 +27,19 @@ const props = defineProps({
 
 // REACTIVITY: This computed block is the key. It recalculates whenever props.data changes.
 const chartData = computed(() => ({
-    labels: props.data.map(d => d.label || d.date),
-    datasets: [
-        {
-            label: 'Avg Posture Score',
-            backgroundColor: 'rgba(99, 102, 241, 0.1)', // Subtle glow
-            borderColor: props.color,
-            pointBackgroundColor: props.color,
-            pointBorderColor: '#fff',
-            pointHoverRadius: 6,
-            data: props.data.map(d => d.value || d.avg_score),
-            tension: 0.4,
-            fill: true,
-        }
-    ]
+    // Extracting time for X-axis labels
+    labels: props.data.map(d => new Date(d.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })),
+    datasets: [{
+        label: 'Efficiency %',
+        // Extracting score for Y-axis points
+        data: props.data.map(d => d.score),
+        borderColor: '#6366f1',
+        backgroundColor: 'rgba(99, 102, 241, 0.1)',
+        tension: 0.4,
+        fill: true,
+        pointRadius: 5,
+        pointHoverRadius: 8
+    }]
 }));
 
 const options = {

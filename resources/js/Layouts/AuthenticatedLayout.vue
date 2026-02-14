@@ -9,19 +9,21 @@ import ToastList from '@/Components/ToastList.vue';
 const page = usePage();
 
 const firstName = computed(() => {
-    // Access the user directly from page props
     const user = page.props.auth?.user;
 
-    if (!user) return 'User';
+    if (!user) return 'Guest';
 
-    // If name is the string 'User' or empty, use email prefix
-    if (!user.name || user.name === 'User') {
-        return user.email ? user.email.split('@')[0] : 'Member';
-    }
+    const placeholders = ['User', 'Admin', 'Guest', 'Account'];
+    const hasRealName = user.name && !placeholders.includes(user.name);
 
-    // Return the actual first name
-    return user.name.split(' ')[0];
+    const displayName = hasRealName 
+        ? user.name 
+        : (user.email ? user.email.split('@')[0] : 'Member');
+
+    const name = displayName.split(/[ ._]/)[0]; 
+    return name.charAt(0).toUpperCase() + name.slice(1);
 });
+
 
 const isAdminPage = computed(() => {
     try { return route().current('admin.*'); } catch { return false; }
