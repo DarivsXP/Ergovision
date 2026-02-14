@@ -3,13 +3,14 @@ import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
 import { ref, onUnmounted, onMounted, computed } from 'vue';
 import { router } from '@inertiajs/vue3'; 
 import axios from 'axios';
+import { useToast } from '@/Composables/useToast'; // [NEW] Import Toast
 
 // --- SMART CONFIGURATION ---
 const isLocal = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
 const AI_ENDPOINT = isLocal ? 'http://127.0.0.1:5000/predict' : 'https://ergovision-ai.onrender.com/predict';
 const AI_BASE_URL = isLocal ? 'http://127.0.0.1:5000/' : 'https://ergovision-ai.onrender.com/';
 
-console.log(`Running in ${isLocal ? 'LOCAL' : 'LIVE'} mode.`);
+const toast = useToast(); // [NEW] Initialize Toast
 
 // --- State Variables ---
 const videoRef = ref(null);
@@ -21,7 +22,7 @@ const calibrationCountdown = ref(0);
 const currentScore = ref(100);
 const isSlouching = ref(false);
 const statusMessage = ref("Initializing...");
-const sessionDurationSecs = ref(0); // [NEW] Timer state
+const sessionDurationSecs = ref(0);
 
 // Posture Reference Data
 const angles = ref({ neck: 0, back: 0 });
@@ -39,7 +40,7 @@ let camera = null;
 let chunkStartTime = Date.now();
 let lastProcessTime = 0;
 let uploadInterval = null;
-let durationInterval = null; // [NEW] Timer interval
+let durationInterval = null; 
 let slouchStartTime = null; 
 let lastNotificationTime = 0;
 
@@ -58,6 +59,7 @@ const wakeUpServer = async () => {
         statusMessage.value = "AI Ready";
     } catch (e) {
         statusMessage.value = "Waking up AI...";
+        // toast.error("AI Server is sleeping. Please wait a moment.", "Connecting...");
     }
 };
 
@@ -79,7 +81,7 @@ onMounted(() => {
         });
         pose.onResults(onResults);
     } else {
-        alert("Error: AI Libraries not loaded. Please refresh.");
+        toast.error("Could not load AI libraries. Please refresh.", "System Error");
     }
 });
 
@@ -126,6 +128,7 @@ const handleAdaptiveFeedback = (slouching) => {
                 alertSound.play().catch(() => {});
                 sessionData.value.alerts++; 
                 lastNotificationTime = Date.now();
+                toast.error("Please sit up straight immediately!", "Posture Critical");
             }
         } 
         else if (duration >= 5) {
@@ -138,6 +141,7 @@ const handleAdaptiveFeedback = (slouching) => {
         if (slouchStartTime && (Date.now() - slouchStartTime) / 1000 > 5) {
             successSound.play().catch(() => {});
             statusMessage.value = "Great Correction!";
+            // toast.success("You corrected your posture!", "Well Done");
             setTimeout(() => { 
                 if(!isSlouching.value) statusMessage.value = "Good Posture"; 
             }, 2000);
@@ -149,12 +153,21 @@ const handleAdaptiveFeedback = (slouching) => {
 };
 
 const triggerCalibration = () => {
-    if (isLocking.value || isCalibrated.value) return;
+    // [FIX 1] Remove "isCalibrated" check so the Reset button actually works!
+    if (isLocking.value) return;
     
+    // [FIX 2] Prevent starting if user is invisible
+    if (!isDetected.value) {
+        toast.error("I can't see you clearly! Please step back and show your full body.", "Calibration Failed");
+        return;
+    }
+
+    // Reset everything for a fresh start
+    isCalibrated.value = false;
     calibrationBuffer.value = [];
     isLocking.value = true;
     calibrationCountdown.value = 5;
-    statusMessage.value = "Get Ready...";
+    statusMessage.value = "Sit Up Straight...";
     
     const timer = setInterval(() => {
         calibrationCountdown.value--;
@@ -166,18 +179,18 @@ const triggerCalibration = () => {
 };
 
 const lockNeutralPosition = () => {
+    // [FIX 3] Check if we actually got good data during the 5s
     if (calibrationBuffer.value.length < 1) {
         isLocking.value = false;
-        alert("Calibration Failed: AI could not see you clearly. Please ensure good lighting and try again.");
+        toast.error("You moved or disappeared during calibration. Please try again.", "Calibration Failed");
         statusMessage.value = "Calibration Failed";
         return;
     }
     
-    // Safety check for zeros
     const validReadings = calibrationBuffer.value.filter(r => r.back > 0 && r.neck > 0);
     if(validReadings.length === 0) {
          isLocking.value = false;
-         alert("Bad Data. Please try again.");
+         toast.error("Data was blurry. Ensure good lighting.", "Calibration Failed");
          return;
     }
 
@@ -187,6 +200,7 @@ const lockNeutralPosition = () => {
     isCalibrated.value = true;
     isLocking.value = false;
     statusMessage.value = "Monitoring Started";
+    toast.success("Baseline set! We are now tracking your posture.", "Calibration Complete");
     successSound.play();
     
     chunkStartTime = Date.now(); 
@@ -197,7 +211,6 @@ const lockNeutralPosition = () => {
 const onResults = async (results) => {
     const now = Date.now();
     
-    // 1. Basic Check: Are there landmarks?
     if (!results.poseLandmarks || results.poseLandmarks.length < 25) {
         isDetected.value = false;
         statusMessage.value = "No Body Detected";
@@ -206,14 +219,11 @@ const onResults = async (results) => {
 
     const lm = results.poseLandmarks;
 
-    // [FIX] 2. Strict Body Check: Hips, Shoulders, AND Ears
-    // We check if the AI is at least 50% confident it sees these points.
-    
+    // Strict Body Check
     const hipsVisible = lm[23].visibility > 0.5 && lm[24].visibility > 0.5;
     const shouldersVisible = lm[11].visibility > 0.5 && lm[12].visibility > 0.5;
-    const earsVisible = lm[7].visibility > 0.5 && lm[8].visibility > 0.5; // Added Ear Check
+    const earsVisible = lm[7].visibility > 0.5 && lm[8].visibility > 0.5;
 
-    // 3. Status Logic: Tell the user exactly what is missing
     if (!hipsVisible || !shouldersVisible || !earsVisible) {
         isDetected.value = false;
         
@@ -227,10 +237,8 @@ const onResults = async (results) => {
         return;
     }
 
-    // If we pass all checks, we are officially "Detected"
     isDetected.value = true;
 
-    // Throttling (200ms)
     if (now - lastProcessTime < 200) return;
     lastProcessTime = now;
 
@@ -265,7 +273,6 @@ const onResults = async (results) => {
 
 const startCamera = async () => {
     try {
-        // [FIX] Constraint for mobile cameras
         const stream = await navigator.mediaDevices.getUserMedia({ 
             video: { facingMode: "user", width: { ideal: 640 }, height: { ideal: 480 } } 
         });
@@ -278,7 +285,6 @@ const startCamera = async () => {
         isCameraOn.value = true;
         isCalibrated.value = false;
 
-        // [NEW] Start Session Timer
         sessionDurationSecs.value = 0;
         if (durationInterval) clearInterval(durationInterval);
         durationInterval = setInterval(() => {
@@ -286,7 +292,7 @@ const startCamera = async () => {
         }, 1000);
 
     } catch (e) {
-        alert("Camera access denied.");
+        toast.error("Please check browser permissions.", "Camera Access Denied");
         console.error(e);
     }
 };
@@ -299,7 +305,6 @@ const stopCamera = () => {
         uploadSessionData(); 
         clearInterval(uploadInterval);
     }
-    // [NEW] Stop Timer
     if (durationInterval) clearInterval(durationInterval);
     if (camera) camera.stop();
 };

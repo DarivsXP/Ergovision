@@ -1,26 +1,20 @@
-// resources/js/Composables/useToast.js
 import { ref } from 'vue';
 
 const items = ref([]);
 
 export function useToast() {
-    
     function add(item) {
         const id = Date.now();
-        const notification = {
+        items.value.push({
             id,
             title: item.title || 'Notification',
             message: item.message || '',
-            type: item.type || 'info', // success, error, warning, info
+            type: item.type || 'info',
             duration: item.duration || 4000
-        };
-        
-        items.value.push(notification);
+        });
 
-        if (notification.duration > 0) {
-            setTimeout(() => {
-                remove(id);
-            }, notification.duration);
+        if (item.duration !== 0) {
+            setTimeout(() => remove(id), item.duration || 4000);
         }
     }
 
@@ -30,11 +24,10 @@ export function useToast() {
 
     return {
         items,
-        add,
-        remove,
         success: (msg, title = 'Success') => add({ title, message: msg, type: 'success' }),
         error: (msg, title = 'Error') => add({ title, message: msg, type: 'error' }),
         warning: (msg, title = 'Warning') => add({ title, message: msg, type: 'warning' }),
-        info: (msg, title = 'Info') => add({ title, message: msg, type: 'info' })
+        info: (msg, title = 'Info') => add({ title, message: msg, type: 'info' }),
+        remove
     };
 }

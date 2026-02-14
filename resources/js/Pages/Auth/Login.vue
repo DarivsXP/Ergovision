@@ -4,28 +4,11 @@ import InputError from '@/Components/InputError.vue';
 import InputLabel from '@/Components/InputLabel.vue';
 import PrimaryButton from '@/Components/PrimaryButton.vue';
 import TextInput from '@/Components/TextInput.vue';
+import ToastList from '@/Components/ToastList.vue';
 import { Head, Link, useForm } from '@inertiajs/vue3';
 import { useToast } from '@/Composables/useToast';
 
 const toast = useToast();
-
-const submit = () => {
-    form.post(route('login'), {
-        onFinish: () => form.reset('password'),
-        onError: (errors) => {
-            toast.error("Invalid email or password.", "Login Failed");
-        }
-    });
-};
-
-defineProps({
-    canResetPassword: {
-        type: Boolean,
-    },
-    status: {
-        type: String,
-    },
-});
 
 const form = useForm({
     email: '',
@@ -33,10 +16,26 @@ const form = useForm({
     remember: false,
 });
 
+const submit = () => {
+    form.post(route('login'), {
+        onFinish: () => form.reset('password'),
+        onError: () => {
+            // Using the professional toast composable
+            toast.error("Invalid email or password.", "Login Failed");
+        }
+    });
+};
+
+defineProps({
+    canResetPassword: Boolean,
+    status: String,
+});
 </script>
 
 <template>
     <Head title="Log in" />
+
+    <ToastList />
 
     <div class="min-h-screen flex w-full">
         
@@ -45,7 +44,7 @@ const form = useForm({
             <div class="absolute inset-0 bg-indigo-900/40 backdrop-blur-[2px]"></div> 
             <div class="w-full h-full flex items-center justify-center p-12 relative z-10">
                 <div class="text-white text-center">
-                    <h1 class="text-4xl font-bold mb-4">Ergovision AI</h1>
+                    <h1 class="text-4xl font-bold mb-4 text-white">Ergovision AI</h1>
                     <p class="text-lg text-indigo-100">Your personal posture assistant. Log in to track your progress.</p>
                 </div>
             </div>
@@ -66,9 +65,9 @@ const form = useForm({
                     </p>
                 </div>
 
-                <div v-if="status" class="rounded-md bg-green-50 p-4">
+                <div v-if="status" class="rounded-md bg-green-50 p-4 border border-green-200">
                     <div class="flex">
-                        <div class="ml-3 text-sm font-medium text-green-800">{{ status }}</div>
+                        <div class="text-sm font-medium text-green-800">{{ status }}</div>
                     </div>
                 </div>
 
@@ -118,7 +117,7 @@ const form = useForm({
                     </div>
 
                     <PrimaryButton
-                        class="w-full flex justify-center py-3 px-4 border border-transparent rounded-lg shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-colors"
+                        class="w-full flex justify-center py-3 px-4 border border-transparent rounded-lg shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-all shadow-md shadow-indigo-500/20"
                         :class="{ 'opacity-75 cursor-not-allowed': form.processing }"
                         :disabled="form.processing"
                     >
@@ -131,13 +130,13 @@ const form = useForm({
                         <div class="w-full border-t border-gray-300"></div>
                     </div>
                     <div class="relative flex justify-center text-sm">
-                        <span class="bg-gray-50 px-2 text-gray-500">Or continue with</span>
+                        <span class="bg-gray-50 px-2 text-gray-500 italic font-mono">Or continue with</span>
                     </div>
                 </div>
 
                 <div class="mt-6">
                     <a href="/auth/google" 
-                       class="flex w-full items-center justify-center gap-3 rounded-lg border border-gray-300 bg-white px-3 py-2.5 text-sm font-semibold text-gray-700 shadow-sm hover:bg-gray-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-gray-300 transition-all">
+                       class="flex w-full items-center justify-center gap-3 rounded-lg border border-gray-300 bg-white px-3 py-2.5 text-sm font-semibold text-gray-700 shadow-sm hover:bg-gray-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-gray-300 transition-all hover:shadow-md">
                         <img class="h-5 w-5" src="https://www.svgrepo.com/show/475656/google-color.svg" alt="Google logo" />
                         Sign in with Google
                     </a>
