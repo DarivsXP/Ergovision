@@ -35,7 +35,8 @@ const submit = () => {
         
         <div class="hidden lg:flex w-1/2 bg-cover bg-center relative" 
              style="background-image: url('https://images.unsplash.com/photo-1451187580459-43490279c0fa?q=80&w=2072&auto=format&fit=crop');">
-            <div class="absolute inset-0 bg-indigo-900/40 backdrop-blur-[2px]"></div> <div class="w-full h-full flex items-center justify-center p-12 relative z-10">
+            <div class="absolute inset-0 bg-indigo-900/40 backdrop-blur-[2px]"></div> 
+            <div class="w-full h-full flex items-center justify-center p-12 relative z-10">
                 <div class="text-white text-center">
                     <h1 class="text-4xl font-bold mb-4">Ergovision AI</h1>
                     <p class="text-lg text-indigo-100">Your personal posture assistant. Log in to track your progress.</p>
@@ -71,7 +72,7 @@ const submit = () => {
                         <TextInput
                             id="email"
                             type="email"
-                            class="block w-full rounded-lg border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm py-2.5"
+                            class="block w-full rounded-lg border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm py-2.5 text-gray-900 bg-white"
                             v-model="form.email"
                             required
                             autofocus
@@ -95,7 +96,7 @@ const submit = () => {
                         <TextInput
                             id="password"
                             type="password"
-                            class="block w-full rounded-lg border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm py-2.5"
+                            class="block w-full rounded-lg border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm py-2.5 text-gray-900 bg-white"
                             v-model="form.password"
                             required
                             autocomplete="current-password"

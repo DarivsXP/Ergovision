@@ -196,12 +196,41 @@ const lockNeutralPosition = () => {
 
 const onResults = async (results) => {
     const now = Date.now();
+    
+    // 1. Basic Check: Are there landmarks?
     if (!results.poseLandmarks || results.poseLandmarks.length < 25) {
         isDetected.value = false;
+        statusMessage.value = "No Body Detected";
         return;
     }
+
+    const lm = results.poseLandmarks;
+
+    // [FIX] 2. Strict Body Check: Hips, Shoulders, AND Ears
+    // We check if the AI is at least 50% confident it sees these points.
+    
+    const hipsVisible = lm[23].visibility > 0.5 && lm[24].visibility > 0.5;
+    const shouldersVisible = lm[11].visibility > 0.5 && lm[12].visibility > 0.5;
+    const earsVisible = lm[7].visibility > 0.5 && lm[8].visibility > 0.5; // Added Ear Check
+
+    // 3. Status Logic: Tell the user exactly what is missing
+    if (!hipsVisible || !shouldersVisible || !earsVisible) {
+        isDetected.value = false;
+        
+        if (!earsVisible) {
+            statusMessage.value = "Show Face/Ears";
+        } else if (!shouldersVisible) {
+            statusMessage.value = "Show Shoulders";
+        } else {
+            statusMessage.value = "Move Back: Show Hips";
+        }
+        return;
+    }
+
+    // If we pass all checks, we are officially "Detected"
     isDetected.value = true;
 
+    // Throttling (200ms)
     if (now - lastProcessTime < 200) return;
     lastProcessTime = now;
 
@@ -211,7 +240,7 @@ const onResults = async (results) => {
             ideal_back: myIdealBack.value,
             ideal_neck: myIdealNeck.value
         });
-
+        
         angles.value = res.data.angles;
 
         if (isLocking.value) {
