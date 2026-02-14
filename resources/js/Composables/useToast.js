@@ -1,33 +1,44 @@
 import { ref } from 'vue';
 
+// State is defined OUTSIDE the function so it persists across all components
 const items = ref([]);
 
 export function useToast() {
-    function add(item) {
+    /**
+     * Internal function to add a toast
+     */
+    const add = ({ title, message, type = 'info', duration = 4000 }) => {
         const id = Date.now();
+
         items.value.push({
             id,
-            title: item.title || 'Notification',
-            message: item.message || '',
-            type: item.type || 'info',
-            duration: item.duration || 4000
+            title,
+            message,
+            type,
         });
 
-        if (item.duration !== 0) {
-            setTimeout(() => remove(id), item.duration || 4000);
+        // Auto-remove after duration
+        if (duration > 0) {
+            setTimeout(() => {
+                remove(id);
+            }, duration);
         }
-    }
+    };
 
-    function remove(id) {
-        items.value = items.value.filter(item => item.id !== id);
-    }
+    /**
+     * Remove a specific toast by ID
+     */
+    const remove = (id) => {
+        items.value = items.value.filter((item) => item.id !== id);
+    };
 
+    // Helper methods for easy access
     return {
-        items,
-        success: (msg, title = 'Success') => add({ title, message: msg, type: 'success' }),
-        error: (msg, title = 'Error') => add({ title, message: msg, type: 'error' }),
-        warning: (msg, title = 'Warning') => add({ title, message: msg, type: 'warning' }),
-        info: (msg, title = 'Info') => add({ title, message: msg, type: 'info' }),
-        remove
+        items, // The reactive array
+        success: (message, title = 'Success') => add({ title, message, type: 'success' }),
+        error: (message, title = 'Error') => add({ title, message, type: 'error' }),
+        warning: (message, title = 'Warning') => add({ title, message, type: 'warning' }),
+        info: (message, title = 'Info') => add({ title, message, type: 'info' }),
+        remove,
     };
 }

@@ -32,7 +32,13 @@ class HandleInertiaRequests extends Middleware
         return [
             ...parent::share($request),
             'auth' => [
-                'user' => $request->user(),
+                // Ensure we are pulling the fresh user object every time
+                'user' => $request->user() ? [
+                    'id' => $request->user()->id,
+                    'name' => $request->user()->name, // This must be the actual column name
+                    'email' => $request->user()->email,
+                    'is_admin' => (bool) $request->user()->is_admin,
+                ] : null,
             ],
         ];
     }

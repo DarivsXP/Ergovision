@@ -10,16 +10,10 @@ use Laravel\Sanctum\HasApiTokens;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use App\Models\PostureChunk;
 
-
 class User extends Authenticatable
 {
-
     /** @use HasFactory<\Database\Factories\UserFactory> */
-    // 2. ADD 'HasApiTokens' TO THIS LIST
     use HasApiTokens, HasFactory, Notifiable;
-
-    /** @use HasFactory<\Database\Factories\UserFactory> */
-    use HasFactory, Notifiable;
 
     /**
      * The attributes that are mass assignable.
@@ -27,13 +21,14 @@ class User extends Authenticatable
      * @var list<string>
      */
     protected $fillable = [
-    'name',
-    'email',
-    'password',
-    'google_id',
-    'avatar',
-    'user_type', // <--- Add this
-];
+        'name',
+        'email',
+        'password',
+        'google_id',
+        'avatar',
+        'user_type',
+        'is_admin', // [ADDED] Required for Admin functionality
+    ];
 
     /**
      * The attributes that should be hidden for serialization.
@@ -55,9 +50,13 @@ class User extends Authenticatable
         return [
             'email_verified_at' => 'datetime',
             'password' => 'hashed',
+            'is_admin' => 'boolean', 
         ];
     }
 
+    /**
+     * Relationship with Posture Data.
+     */
     public function postureChunks(): HasMany
     {
         return $this->hasMany(PostureChunk::class);

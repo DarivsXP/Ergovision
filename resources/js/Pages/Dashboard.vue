@@ -1,248 +1,150 @@
 <script setup>
+import { ref } from 'vue';
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
-import { Head, usePage, router } from '@inertiajs/vue3';
-import { ref, computed, watch } from 'vue';
-import LineChart from '@/Components/LineChart.vue';
+import { Head, router } from '@inertiajs/vue3'; 
+import PostureChart from '@/Components/PostureChart.vue';
 
 const props = defineProps({
-    postureChunks: {
-        type: Array,
-        default: () => []
-    },
-    summaryStats: {
-        type: Object,
-        default: () => ({
-            averageScore: 0,
-            totalAlerts: 0,
-            totalSlouch: 0,
-            totalDuration: '0m 0s', // Default value
-            totalLogs: 0
-        })
-    },
+    // Updated to match your backend data structure
+    summaryStats: Object,    // total_time, corrections, avg_score
+    history: Array,         // Session history log
+    postureChunks: Array,   // Data for the Growth Curve chart
     filters: Object
 });
 
-const page = usePage();
-const user = computed(() => page.props.auth?.user || { name: 'User' });
+// Period management
+const activeFilter = ref(props.filters?.period || '7d');
 
-// --- 1. Date Filter Logic ---
-const selectedDate = ref(props.filters.date);
-
-watch(selectedDate, (newDate) => {
-    router.get('/dashboard', { date: newDate }, {
+const updateFilter = (period) => {
+    activeFilter.value = period;
+    router.get(route('dashboard'), { period }, {
         preserveState: true,
-        replace: true,
-        preserveScroll: true
-    });
-});
-
-// --- 2. Time Formatting Helper ---
-const formatPH = (dateString, type = 'full') => {
-    const options = type === 'time' 
-        ? { hour: '2-digit', minute: '2-digit', hour12: true, timeZone: 'Asia/Manila' }
-        : { dateStyle: 'medium', timeZone: 'Asia/Manila' };
-    
-    return new Date(dateString).toLocaleString('en-PH', options);
-};
-
-// --- 3. Duration Formatter (For Table) ---
-const formatDuration = (seconds) => {
-    if (!seconds) return '30s'; 
-    const m = Math.floor(seconds / 60);
-    const s = seconds % 60;
-    return m > 0 ? `${m}m ${s}s` : `${s}s`;
-};
-
-// --- 4. Chart Data Logic ---
-const chartData = computed(() => {
-    if (!props.postureChunks || props.postureChunks.length === 0) return null;
-
-    const chunks = [...props.postureChunks].reverse();
-    const labels = chunks.map(chunk => formatPH(chunk.created_at, 'time'));
-    const scoreData = chunks.map(chunk => chunk.score);
-
-    return {
-        labels: labels,
-        datasets: [{
-            label: 'Posture Efficiency %',
-            backgroundColor: (ctx) => {
-                const gradient = ctx.chart.ctx.createLinearGradient(0, 0, 0, 300);
-                gradient.addColorStop(0, 'rgba(99, 102, 241, 0.4)');
-                gradient.addColorStop(1, 'rgba(99, 102, 241, 0.0)');
-                return gradient;
-            },
-            borderColor: '#6366f1',
-            borderWidth: 2,
-            data: scoreData,
-            fill: true,
-            tension: 0.4,
-            pointRadius: 4,
-            pointBackgroundColor: '#1e293b',
-            pointBorderColor: '#6366f1',
-            pointBorderWidth: 2
-        }]
-    };
-});
-
-// --- 5. Actions ---
-const deleteEntry = (id) => {
-    if (!confirm('Permanently delete this session log?')) return;
-    router.delete(`/posture-chunks/${id}`, {
         preserveScroll: true,
-        onSuccess: () => console.log('Entry deleted')
+        replace: true
     });
-};
-
-const testCreateChunk = () => {
-    router.post('/posture-chunks', {
-        score: Math.floor(Math.random() * 20 + 75),
-        slouch_duration: Math.floor(Math.random() * 10),
-        duration_seconds: 30,
-        alert_count: 0
-    }, { preserveScroll: true });
 };
 </script>
 
 <template>
-    <Head title="Dashboard" />
+    <Head title="My Dashboard" />
 
     <AuthenticatedLayout>
-        <div class="py-12 bg-slate-900 min-h-screen font-sans selection:bg-indigo-500 selection:text-white">
+        <template #header>
+            <div class="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+                <div>
+                    <h2 class="font-black text-2xl text-white tracking-tighter uppercase">
+                        Personal <span class="text-indigo-500">Analytics</span>
+                    </h2>
+                    <p class="text-slate-500 text-[10px] font-bold tracking-widest uppercase mt-1">
+                        Individual Ergonomic Performance Tracking
+                    </p>
+                </div>
+
+                <div class="flex bg-slate-900/50 p-1 rounded-xl border border-white/5 backdrop-blur-sm">
+                    <button 
+                        @click="updateFilter('3d')"
+                        class="px-4 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all"
+                        :class="activeFilter === '3d' ? 'bg-indigo-600 text-white shadow-lg' : 'text-slate-500 hover:text-slate-300'"
+                    >
+                        3D
+                    </button>
+                    <button 
+                        @click="updateFilter('7d')"
+                        class="px-4 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all"
+                        :class="activeFilter === '7d' ? 'bg-indigo-600 text-white shadow-lg' : 'text-slate-500 hover:text-white'"
+                    >
+                        7D
+                    </button>
+                    <button 
+                        @click="updateFilter('30d')"
+                        class="px-4 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all"
+                        :class="activeFilter === '30d' ? 'bg-indigo-600 text-white shadow-lg' : 'text-slate-500 hover:text-white'"
+                    >
+                        1M
+                    </button>
+                </div>
+            </div>
+        </template>
+
+        <div class="py-12 bg-[#020617]"> 
             <div class="max-w-7xl mx-auto sm:px-6 lg:px-8 space-y-8">
-
-                <div class="flex flex-col md:flex-row md:justify-between md:items-end gap-6 px-2">
-                    <div>
-                        <h2 class="text-3xl font-black text-white tracking-tighter">
-                            ERGO<span class="text-indigo-500">VISION</span>
-                        </h2>
-                        <p class="text-slate-400 text-xs font-mono uppercase tracking-widest mt-1">
-                            Analytics & Historical Telemetry
-                        </p>
-                    </div>
-
-                    <div class="flex items-center gap-4">
-                        <div class="flex items-center bg-slate-800 border border-slate-700 rounded-xl px-4 py-2 shadow-lg">
-                            <span class="text-[10px] font-bold text-slate-400 uppercase mr-3">Filter Date</span>
-                            <input 
-                                type="date" 
-                                v-model="selectedDate" 
-                                class="bg-transparent border-none p-0 text-sm font-bold text-white focus:ring-0 cursor-pointer w-32"
-                            >
-                        </div>
-                        <button @click="testCreateChunk" 
-                                class="hidden md:block px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold rounded-xl transition-all shadow-lg shadow-indigo-500/20 uppercase tracking-wider">
-                            + Add Test
-                        </button>
-                    </div>
-                </div>
-
-                <div class="grid grid-cols-1 md:grid-cols-4 gap-6">
-                    
-                    <div class="bg-slate-800/50 backdrop-blur-sm p-6 rounded-3xl border border-slate-700 shadow-xl relative overflow-hidden group hover:border-indigo-500/30 transition-colors">
-                        <div class="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition">
-                            <svg xmlns="http://www.w3.org/2000/svg" class="h-16 w-16 text-indigo-500" fill="currentColor" viewBox="0 0 20 20"><path d="M2 11a1 1 0 011-1h2a1 1 0 011 1v5a1 1 0 01-1 1H3a1 1 0 01-1-1v-5zM8 7a1 1 0 011-1h2a1 1 0 011 1v9a1 1 0 01-1 1H9a1 1 0 01-1-1V7zM14 4a1 1 0 011-1h2a1 1 0 011 1v12a1 1 0 01-1 1h-2a1 1 0 01-1-1V4z" /></svg>
-                        </div>
-                        <p class="text-[10px] font-bold text-indigo-400 uppercase tracking-widest mb-1">Avg Efficiency</p>
-                        <p class="text-4xl font-black text-white">{{ summaryStats.averageScore }}<span class="text-lg text-slate-500">%</span></p>
-                    </div>
-
-                    <div class="bg-slate-800/50 backdrop-blur-sm p-6 rounded-3xl border border-slate-700 shadow-xl relative overflow-hidden group hover:border-emerald-500/30 transition-colors">
-                        <div class="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition">
-                            <svg xmlns="http://www.w3.org/2000/svg" class="h-16 w-16 text-emerald-500" fill="currentColor" viewBox="0 0 20 20">
-                                <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm1-12a1 1 0 10-2 0v4a1 1 0 00.293.707l2.828 2.829a1 1 0 101.415-1.415L11 9.586V6z" clip-rule="evenodd" />
-                            </svg>
-                        </div>
-                        <p class="text-[10px] font-bold text-emerald-400 uppercase tracking-widest mb-1">Total Time</p>
-                        <p class="text-4xl font-black text-white">{{ summaryStats.totalDuration }}</p>
-                    </div>
-
-                    <div class="bg-slate-800/50 backdrop-blur-sm p-6 rounded-3xl border border-slate-700 shadow-xl relative overflow-hidden group hover:border-amber-500/30 transition-colors">
-                        <div class="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition">
-                            <svg xmlns="http://www.w3.org/2000/svg" class="h-16 w-16 text-amber-500" fill="currentColor"><path fill-rule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clip-rule="evenodd" /></svg>
-                        </div>
-                        <p class="text-[10px] font-bold text-amber-400 uppercase tracking-widest mb-1">Slouch Time</p>
-                        <p class="text-4xl font-black text-white">
-                            {{ Math.floor(summaryStats.totalSlouch / 60) }}<span class="text-lg text-slate-500">m</span> 
-                            {{ summaryStats.totalSlouch % 60 }}<span class="text-lg text-slate-500">s</span>
-                        </p>
-                    </div>
-
-                    <div class="bg-slate-800/50 backdrop-blur-sm p-6 rounded-3xl border border-slate-700 shadow-xl relative overflow-hidden group hover:border-red-500/30 transition-colors">
-                        <div class="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition">
-                            <svg xmlns="http://www.w3.org/2000/svg" class="h-16 w-16 text-red-500" fill="currentColor"><path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clip-rule="evenodd" /></svg>
-                        </div>
-                        <p class="text-[10px] font-bold text-red-400 uppercase tracking-widest mb-1">Corrections</p>
-                        <p class="text-4xl font-black text-white">{{ summaryStats.totalAlerts }}</p>
-                    </div>
-                </div>
-
-                <div class="bg-slate-800 rounded-3xl p-8 border border-slate-700 shadow-2xl">
-                    <div class="flex items-center gap-3 mb-8">
-                        <div class="w-2 h-8 bg-indigo-500 rounded-full"></div>
-                        <h3 class="text-sm font-bold text-slate-400 uppercase tracking-widest">
-                            Postural Trend: <span class="text-white">{{ formatPH(selectedDate) }}</span>
+                
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+                    <div class="bg-slate-900/40 border border-white/5 p-8 rounded-[2rem] hover:border-indigo-500/30 transition-all duration-500">
+                        <p class="text-slate-500 text-[10px] font-black uppercase tracking-[0.2em]">Monitoring Time</p>
+                        <h3 class="text-5xl font-black text-white mt-4 tracking-tighter">
+                            {{ summaryStats?.total_time || 0 }}<span class="text-lg text-indigo-500 ml-1">hrs</span>
                         </h3>
+                        <p class="text-indigo-400/50 text-[10px] font-bold mt-2 uppercase">Total protection active</p>
                     </div>
-                    
-                    <div class="h-[350px] w-full">
-                        <LineChart v-if="chartData" :chart-data="chartData" />
-                        <div v-else class="h-full flex flex-col items-center justify-center text-slate-500 border-2 border-dashed border-slate-700 rounded-2xl">
-                            <p class="text-lg font-bold">No telemetry recorded</p>
-                            <p class="text-xs uppercase tracking-widest mt-2">Start a session to generate data</p>
+
+                    <div class="bg-slate-900/40 border border-white/5 p-8 rounded-[2rem] hover:border-rose-500/30 transition-all duration-500">
+                        <p class="text-slate-500 text-[10px] font-black uppercase tracking-[0.2em]">Slouch Alerts</p>
+                        <h3 class="text-5xl font-black text-white mt-4 tracking-tighter">{{ summaryStats?.corrections || 0 }}</h3>
+                        <p class="text-rose-400/50 text-[10px] font-bold mt-2 uppercase">Corrections issued this period</p>
+                    </div>
+
+                    <div class="bg-slate-900/40 border border-white/5 p-8 rounded-[2rem] hover:border-emerald-500/30 transition-all duration-500">
+                        <p class="text-slate-500 text-[10px] font-black uppercase tracking-[0.2em]">Posture Grade</p>
+                        <div class="flex items-baseline gap-2 mt-4">
+                            <h3 class="text-5xl font-black text-white tracking-tighter">{{ summaryStats?.avg_score || 0 }}</h3>
+                            <span class="text-emerald-500 font-black text-xl">%</span>
+                        </div>
+                        <p class="text-emerald-400/50 text-[10px] font-bold mt-2 uppercase">Alignment Accuracy</p>
+                    </div>
+                </div>
+
+                <div class="bg-slate-900/40 border border-white/5 p-8 rounded-[2.5rem]">
+                    <div class="mb-8">
+                        <h4 class="text-white font-black text-sm uppercase tracking-widest">Growth Curve</h4>
+                        <p class="text-slate-500 text-[10px] uppercase font-bold tracking-tighter">Your postural stability over the last {{ activeFilter }}</p>
+                    </div>
+                    <div class="h-[350px]">
+                        <PostureChart :data="postureChunks" color="#6366f1" />
+                    </div>
+                </div>
+
+                <div class="bg-slate-900/40 border border-white/5 rounded-[2.5rem] overflow-hidden">
+                    <div class="p-8 border-b border-white/5 flex justify-between items-center bg-white/[0.02]">
+                        <div>
+                            <h4 class="text-white font-black text-sm uppercase tracking-widest">Session Log</h4>
+                            <p class="text-slate-500 text-[10px] font-bold uppercase mt-1">Detailed history of recent monitoring</p>
                         </div>
                     </div>
-                </div>
-
-                <div class="bg-slate-800 shadow-xl rounded-3xl overflow-hidden border border-slate-700 mb-12">
-                    <table class="w-full text-sm text-left">
-                        <thead class="bg-slate-900/50 text-slate-400 font-bold uppercase text-[10px] tracking-widest border-b border-slate-700">
-                            <tr>
-                                <th class="px-8 py-5">Timestamp</th>
-                                <th class="px-8 py-5">Duration</th> 
-                                <th class="px-8 py-5 text-center">Score</th>
-                                <th class="px-8 py-5 text-center">Slouching</th>
-                                <th class="px-8 py-5 text-center">Alerts</th>
-                                <th class="px-8 py-5 text-right">Actions</th>
-                            </tr>
-                        </thead>
-                        <tbody class="divide-y divide-slate-700/50 text-slate-300">
-                            <tr v-for="chunk in postureChunks" :key="chunk.id" class="hover:bg-slate-700/50 transition group">
-                                <td class="px-8 py-5 font-mono text-xs text-indigo-300">{{ formatPH(chunk.created_at, 'time') }}</td>
-                                
-                                <td class="px-8 py-5 font-mono text-xs text-emerald-400">
-                                    {{ formatDuration(chunk.duration_seconds || 30) }}
-                                </td>
-
-                                <td class="px-8 py-5 text-center">
-                                    <span class="px-3 py-1 rounded-full text-xs font-bold border" 
-                                          :class="chunk.score >= 80 ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' : 'bg-red-500/10 text-red-400 border-red-500/20'">
-                                        {{ chunk.score }}%
-                                    </span>
-                                </td>
-                                
-                                <td class="px-8 py-5 text-center text-slate-400">{{ chunk.slouch_duration }}s</td>
-                                
-                                <td class="px-8 py-5 text-center">
-                                    <span v-if="chunk.alert_count > 0" class="text-white font-bold bg-red-500 px-2 py-0.5 rounded text-xs">{{ chunk.alert_count }}</span>
-                                    <span v-else class="text-slate-600">-</span>
-                                </td>
-                                
-                                <td class="px-8 py-5 text-right">
-                                    <button @click="deleteEntry(chunk.id)" class="text-slate-600 hover:text-red-400 transition opacity-0 group-hover:opacity-100">
-                                        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 ml-auto" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                                        </svg>
-                                    </button>
-                                </td>
-                            </tr>
-                        </tbody>
-                    </table>
                     
-                    <div v-if="postureChunks.length === 0" class="p-12 text-center text-slate-500 font-mono text-xs uppercase tracking-widest">
-                        No logs found for this date.
+                    <div class="overflow-x-auto">
+                        <table class="w-full text-left">
+                            <thead>
+                                <tr class="text-slate-500 text-[9px] uppercase font-black tracking-[0.2em] bg-black/20">
+                                    <th class="px-8 py-5">Timestamp</th>
+                                    <th class="px-8 py-5">Duration</th>
+                                    <th class="px-8 py-5 text-right">Score</th>
+                                </tr>
+                            </thead>
+                            <tbody class="divide-y divide-white/5">
+                                <tr v-for="session in history" :key="session.id" class="hover:bg-indigo-500/[0.03] transition-colors">
+                                    <td class="px-8 py-6 text-slate-200 font-bold text-sm">
+                                        {{ new Date(session.created_at).toLocaleString() }}
+                                    </td>
+                                    <td class="px-8 py-6 text-slate-500 font-mono text-xs">
+                                        {{ session.duration_formatted }}
+                                    </td>
+                                    <td class="px-8 py-6 text-right">
+                                        <span class="px-3 py-1 rounded-full text-[10px] font-black border"
+                                            :class="session.score > 80 ? 'border-emerald-500/30 text-emerald-500 bg-emerald-500/10' : 'border-rose-500/30 text-rose-500 bg-rose-500/10'">
+                                            {{ session.score }}%
+                                        </span>
+                                    </td>
+                                </tr>
+                                <tr v-if="!history || history.length === 0">
+                                    <td colspan="3" class="px-8 py-20 text-center text-slate-600 uppercase text-[10px] font-black tracking-widest">
+                                        No session data available for this window
+                                    </td>
+                                </tr>
+                            </tbody>
+                        </table>
                     </div>
                 </div>
-
             </div>
         </div>
     </AuthenticatedLayout>
