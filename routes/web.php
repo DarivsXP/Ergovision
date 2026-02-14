@@ -14,7 +14,6 @@ use Illuminate\Support\Facades\Auth;
 |--------------------------------------------------------------------------
 */
 
-// 1. The Entrance
 Route::get('/', function () {
     if (Auth::check()) {
         return redirect()->route('dashboard');
@@ -22,11 +21,9 @@ Route::get('/', function () {
     return redirect()->route('login');
 });
 
-// 2. Social Login (Google)
 Route::get('auth/google', [SocialAuthController::class, 'redirectToGoogle'])->name('auth.google');
 Route::get('auth/google/callback', [SocialAuthController::class, 'handleGoogleCallback']);
 
-// 3. Temporary Maintenance
 Route::get('/force-migrate', function () {
     \Illuminate\Support\Facades\Artisan::call('migrate', ['--force' => true]);
     return 'Database Migration Completed Successfully!';
@@ -62,11 +59,18 @@ Route::middleware(['auth', 'verified'])->group(function () {
     | Admin Routes
     |----------------------------------------------------------------------
     */
-        Route::prefix('admin')
-        ->middleware('can:access-admin') // [ADD THIS LINE]
+    Route::prefix('admin')
+        ->name('admin.') // This ensures all child routes start with 'admin.'
+        ->middleware('can:access-admin')
         ->group(function () {
-            Route::get('/', [AdminController::class, 'index'])->name('admin.dashboard');
-            Route::get('/users/{user}', [AdminController::class, 'show'])->name('admin.users.show');
+            // dashboard -> mapped to admin.dashboard
+            Route::get('/', [AdminController::class, 'index'])->name('dashboard');
+            
+            // [FIXED] Added the missing users index route
+            Route::get('/users', [AdminController::class, 'index'])->name('users.index'); 
+            
+            // users/{user} -> mapped to admin.users.show
+            Route::get('/users/{user}', [AdminController::class, 'show'])->name('users.show');
         });
 });
 

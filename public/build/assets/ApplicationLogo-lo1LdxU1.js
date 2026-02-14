@@ -1,0 +1,1 @@
+import{_ as o}from"./_plugin-vue_export-helper-DlAUqK2U.js";import{o as c,c as t}from"./app-CkDjG87e.js";const r={},s={src:"/logo.png",alt:"ErgoVision Logo",class:"h-40 w-auto"};function e(n,a){return c(),t("img",s)}const p=o(r,[["render",e]]);export{p as A};
