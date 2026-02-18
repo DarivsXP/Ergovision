@@ -67,10 +67,14 @@ Route::middleware(['auth', 'verified'])->group(function () {
             Route::get('/', [AdminController::class, 'index'])->name('dashboard');
             
             // [FIXED] Added the missing users index route
-            Route::get('/users', [AdminController::class, 'index'])->name('users.index'); 
+            Route::get('/users', [AdminController::class, 'users'])->name('users.index');
             
             // users/{user} -> mapped to admin.users.show
             Route::get('/users/{user}', [AdminController::class, 'show'])->name('users.show');
+
+            Route::get('/users/{user}/edit', [AdminController::class, 'edit'])->name('users.edit');
+            Route::patch('/users/{user}', [AdminController::class, 'update'])->name('users.update');
+            Route::delete('/users/{user}', [AdminController::class, 'destroy'])->name('users.destroy');
         });
 });
 

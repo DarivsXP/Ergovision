@@ -31,14 +31,23 @@ class HandleInertiaRequests extends Middleware
     {
         return [
             ...parent::share($request),
+            
+            // 1. THIS IS THE CRITICAL PART FOR USER DATA
             'auth' => [
-                // Ensure we are pulling the fresh user object every time
                 'user' => $request->user() ? [
                     'id' => $request->user()->id,
-                    'name' => $request->user()->name, // This must be the actual column name
+                    'name' => $request->user()->name,
                     'email' => $request->user()->email,
                     'is_admin' => (bool) $request->user()->is_admin,
+                    'avatar' => $request->user()->avatar ?? null, 
                 ] : null,
+            ],
+
+            // 2. THIS IS FOR YOUR TOAST NOTIFICATIONS
+            'flash' => [
+                'message' => fn () => $request->session()->get('message'),
+                'error' => fn () => $request->session()->get('error'),
+                'warning' => fn () => $request->session()->get('warning'),
             ],
         ];
     }

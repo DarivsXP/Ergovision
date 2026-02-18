@@ -48,7 +48,10 @@ const props = defineProps({
                 <div class="bg-slate-900 border border-slate-800 rounded-[2rem] overflow-hidden shadow-2xl">
                     <div class="p-6 border-b border-slate-800 flex justify-between items-center">
                         <h4 class="text-white font-bold tracking-tight">Recent Deployments (Users)</h4>
-                        <button class="text-xs text-slate-500 hover:text-white transition">View All</button>
+                        
+                        <Link :href="route('admin.users.index')" class="text-xs text-indigo-400 hover:text-white transition font-bold uppercase tracking-wider">
+                            View Full Roster &rarr;
+                        </Link>
                     </div>
                     
                     <div class="overflow-x-auto">
@@ -68,7 +71,7 @@ const props = defineProps({
                                     <td class="p-5 text-slate-500 text-xs">{{ new Date(user.created_at).toLocaleDateString() }}</td>
                                     <td class="p-5 text-right">
                                         <Link :href="route('admin.users.show', user.id)" class="text-indigo-400 hover:text-white font-bold text-xs uppercase tracking-tighter">
-                                            Inspect _
+                                            Inspect
                                         </Link>
                                     </td>
                                 </tr>

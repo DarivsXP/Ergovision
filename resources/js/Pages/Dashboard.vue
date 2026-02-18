@@ -145,7 +145,7 @@ const formatPH = (dateString, type = 'full') => {
                     <div class="h-[400px] w-full">
                         <PostureChart 
                             v-if="postureChunks.length > 0" 
-                            :key="postureChunks.length + selectedDate"
+                            :key="`${activePeriod}-${selectedDate}-${postureChunks.length}`" 
                             :data="postureChunks" 
                         />
                         <div v-else class="h-full flex flex-col items-center justify-center border-2 border-dashed border-white/5 rounded-[2rem] text-slate-600">

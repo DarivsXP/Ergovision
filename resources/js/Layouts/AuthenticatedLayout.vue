@@ -8,17 +8,15 @@ import ToastList from '@/Components/ToastList.vue';
 
 const page = usePage();
 
-// Stable Name Logic: Extract first part and format properly
-const firstName = computed(() => {
-    const user = page.props.auth?.user;
-    if (!user) return 'User';
 
-    const rawName = (user.name && user.name !== 'User' && user.name !== '') 
-        ? user.name 
-        : (user.email ? user.email.split('@')[0] : 'Member');
+// SIMPLIFIED: Just get the name directly from the database
+const userName = computed(() => {
+    return page.props.auth?.user?.name || 'User';
+});
 
-    const firstWord = rawName.trim().split(/[ |_.]/)[0];
-    return firstWord.charAt(0).toUpperCase() + firstWord.slice(1).toLowerCase();
+// Get just the first letter for the avatar circle
+const userInitial = computed(() => {
+    return userName.value.charAt(0).toUpperCase();
 });
 
 // Stable Role Logic
@@ -96,11 +94,16 @@ const dashboardRoute = computed(() => {
                             <Dropdown align="right" width="48">
                                 <template #trigger>
                                     <button class="flex items-center gap-3 p-1.5 pr-4 rounded-full bg-white/5 border border-white/10 hover:bg-white/10 transition-all focus:outline-none">
+                                        
                                         <div class="h-8 w-8 rounded-full bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center text-xs font-black text-white uppercase shadow-lg">
-                                            {{ firstName.charAt(0) }}
+                                            {{ userInitial }}
                                         </div>
-                                        <span class="text-sm font-bold text-slate-200">{{ firstName }}</span>
-                                        <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 text-slate-500" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M19 9l-7 7-7-7" /></svg>
+
+                                        <span class="text-sm font-bold text-slate-200">{{ userName }}</span>
+
+                                        <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 text-slate-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M19 9l-7 7-7-7" />
+                                        </svg>
                                     </button>
                                 </template>
 
