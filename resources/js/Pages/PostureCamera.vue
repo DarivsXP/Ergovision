@@ -211,34 +211,39 @@ const lockNeutralPosition = () => {
 const onResults = async (results) => {
     const now = Date.now();
     
+    // 1. Check if landmarks exist
     if (!results.poseLandmarks || results.poseLandmarks.length < 25) {
         isDetected.value = false;
-        statusMessage.value = "No Body Detected";
+        statusMessage.value = "Searching for body...";
         return;
     }
 
     const lm = results.poseLandmarks;
 
-    // Strict Body Check
-    const hipsVisible = lm[23].visibility > 0.5 && lm[24].visibility > 0.5;
-    const shouldersVisible = lm[11].visibility > 0.5 && lm[12].visibility > 0.5;
-    const earsVisible = lm[7].visibility > 0.5 && lm[8].visibility > 0.5;
+    // 2. Strict Body Visibility Check (MediaPipe 0.0 to 1.0)
+    // If visibility is too low, the person is likely missing or lighting is poor.
+    const visibilityThreshold = 0.5;
+    const requiredLandmarks = [8, 12, 24, 23, 11, 7]; // Ears, Shoulders, Hips
+    const isVisible = requiredLandmarks.every(id => lm[id].visibility > visibilityThreshold);
 
-    if (!hipsVisible || !shouldersVisible || !earsVisible) {
+    if (!isVisible) {
         isDetected.value = false;
-        
-        if (!earsVisible) {
-            statusMessage.value = "Show Face/Ears";
-        } else if (!shouldersVisible) {
-            statusMessage.value = "Show Shoulders";
-        } else {
-            statusMessage.value = "Move Back: Show Hips";
-        }
+        statusMessage.value = "Please align with camera";
         return;
+    }
+
+    // 3. Standing Detection
+    // In sit-down ergonomics, if the hips (Y-axis) are in the top 40% of the screen, 
+    // the user is likely standing or walking away.
+    if (lm[24].y < 0.4) {
+        isDetected.value = true; 
+        statusMessage.value = "Standing Detected - Paused";
+        return; 
     }
 
     isDetected.value = true;
 
+    // Throttle AI hits to ~5 per second to prevent lag
     if (now - lastProcessTime < 200) return;
     lastProcessTime = now;
 
@@ -248,26 +253,43 @@ const onResults = async (results) => {
             ideal_back: myIdealBack.value,
             ideal_neck: myIdealNeck.value
         });
-        
+
+        // Handle Status from Python (user_not_detected, standing, active)
+        if (res.data.status !== 'active' && res.data.status !== 'standing') {
+             statusMessage.value = res.data.message;
+             return;
+        }
+
         angles.value = res.data.angles;
 
+        // Calibration logic
         if (isLocking.value) {
             calibrationBuffer.value.push(res.data.angles);
             if (calibrationBuffer.value.length > 15) calibrationBuffer.value.shift();
         }
 
         if (isCalibrated.value) {
-            currentScore.value = res.data.score;
+            // --- SMOOTHING LOGIC (Moving Average) ---
+            // We take the last 5 scores from the AI and average them to stop jitter.
+            scoreHistory.value.push(res.data.score);
+            if (scoreHistory.value.length > 5) scoreHistory.value.shift();
+            
+            const average = scoreHistory.value.reduce((a, b) => a + b, 0) / scoreHistory.value.length;
+            currentScore.value = Math.round(average);
+
             const aiSaysSlouch = res.data.label === 1;
             const scoreIsFailing = currentScore.value < 75;
+            
             isSlouching.value = aiSaysSlouch || scoreIsFailing;
             handleAdaptiveFeedback(isSlouching.value);
-            sessionData.value.scores.push(res.data.score);
+
+            // Record session telemetry
+            sessionData.value.scores.push(currentScore.value);
             sessionData.value.totalFrames++;
             if (isSlouching.value) sessionData.value.slouchFrames++;
         }
     } catch (err) { 
-        console.error("AI Server Error"); 
+        console.error("AI Communication Error"); 
     }
 };
 
