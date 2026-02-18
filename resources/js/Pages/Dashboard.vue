@@ -219,7 +219,7 @@ const handleDelete = (id) => {
                                     </span>
 
                                     <button 
-                                        @click="deleteSession(chunk.id)" 
+                                        @click="handleDelete(chunk.id)" 
                                         class="text-slate-500 hover:text-rose-500 transition-colors p-1"
                                         title="Delete Session"
                                     >
