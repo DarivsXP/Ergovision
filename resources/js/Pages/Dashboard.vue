@@ -73,6 +73,30 @@ const formatPH = (dateString, type = 'full') => {
         : { dateStyle: 'medium', timeZone: 'Asia/Manila' };
     return date.toLocaleString('en-PH', options);
 };
+
+const tableChunks = computed(() => {
+    // We reverse the array so the newest (end of the array) appears first in the table
+    const reversed = [...props.postureChunks].reverse();
+    return showAllLogs.value ? reversed : reversed.slice(0, 5);
+});
+
+const handleDelete = (id) => {
+    if (confirm('Are you sure you want to remove this session? This will update your efficiency score immediately.')) {
+        router.delete(route('posture-chunks.destroy', id), {
+            preserveScroll: true,
+            onStart: () => {
+                // Optional: You can show a "Deleting..." toast here if you like
+            },
+            onSuccess: () => {
+                // The backend 'with('message', ...)' will automatically 
+                // trigger your ToastList component.
+            },
+            onError: () => {
+                toast.error("Failed to delete the session. Please try again.");
+            }
+        });
+    }
+};
 </script>
 
 <template>
@@ -170,16 +194,40 @@ const formatPH = (dateString, type = 'full') => {
                             </tr>
                         </thead>
                         <tbody class="divide-y divide-white/5">
-                            <tr v-for="chunk in displayedChunks" :key="chunk.id" class="hover:bg-white/[0.01] transition-colors">
-                                <td class="px-10 py-6 font-mono text-xs text-slate-400">{{ formatPH(chunk.created_at, 'time') }}</td>
+                            <tr v-for="chunk in tableChunks" :key="chunk.id" class="hover:bg-white/[0.01] transition-colors">
+                                <td class="px-10 py-6 font-mono text-xs text-slate-400">
+                                    <span v-if="activePeriod" class="text-[10px] text-indigo-400/50 mr-2">
+                                        {{ formatPH(chunk.created_at, 'short') }}
+                                    </span>
+                                    {{ formatPH(chunk.created_at, 'time') }}
+                                </td>
+                                
                                 <td class="px-10 py-6 text-center">
                                     <span class="px-4 py-1.5 rounded-xl text-[10px] font-black border" 
-                                          :class="chunk.score >= 80 ? 'bg-emerald-500/10 text-emerald-500 border-emerald-500/20' : 'bg-red-500/10 text-red-400 border-red-500/20'">
+                                        :class="chunk.score >= 80 ? 'bg-emerald-500/10 text-emerald-500 border-emerald-500/20' : 'bg-red-500/10 text-red-400 border-red-500/20'">
                                         {{ chunk.score }}%
                                     </span>
                                 </td>
-                                <td class="px-10 py-6 text-center text-slate-400 font-bold text-sm">{{ chunk.alert_count }}</td>
-                                <td class="px-10 py-6 text-right pr-12 text-slate-600 font-black text-[10px] uppercase">Telemetry_Verified</td>
+                                
+                                <td class="px-10 py-6 text-center text-slate-400 font-bold text-sm">
+                                    {{ chunk.alert_count }}
+                                </td>
+                                
+                                <td class="px-10 py-6 text-right pr-12 flex items-center justify-end gap-4">
+                                    <span class="text-slate-600 font-black text-[10px] uppercase">
+                                        Telemetry_Verified
+                                    </span>
+
+                                    <button 
+                                        @click="deleteSession(chunk.id)" 
+                                        class="text-slate-500 hover:text-rose-500 transition-colors p-1"
+                                        title="Delete Session"
+                                    >
+                                        <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                                        </svg>
+                                    </button>
+                                </td>
                             </tr>
                         </tbody>
                     </table>

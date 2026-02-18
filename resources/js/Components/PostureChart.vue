@@ -3,42 +3,28 @@ import { computed } from 'vue';
 import { Line } from 'vue-chartjs';
 import { 
     Chart as ChartJS, 
-    Title, 
-    Tooltip, 
-    Legend, 
-    LineElement, 
-    CategoryScale, 
-    LinearScale, 
-    PointElement,
-    Filler 
+    Title, Tooltip, Legend, LineElement, CategoryScale, LinearScale, PointElement, Filler 
 } from 'chart.js';
 
-// Added Filler to allow for the cool glow effect under the line
 ChartJS.register(Title, Tooltip, Legend, LineElement, CategoryScale, LinearScale, PointElement, Filler);
 
 const props = defineProps({
-    // MATCHING: Your dashboard sends :data="postureChunks" or :data="chart_data"
-    data: {
-        type: Array,
-        default: () => []
-    },
+    data: { type: Array, default: () => [] },
     color: { type: String, default: '#6366f1' }
 });
 
-// REACTIVITY: This computed block is the key. It recalculates whenever props.data changes.
 const chartData = computed(() => ({
-    // Extracting time for X-axis labels
-    labels: props.data.map(d => new Date(d.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })),
+    // FIX: Send the raw created_at string so the options callback can parse it properly
+    labels: props.data.map(d => d.created_at), 
     datasets: [{
         label: 'Efficiency %',
-        // Extracting score for Y-axis points
         data: props.data.map(d => d.score),
         borderColor: '#6366f1',
         backgroundColor: 'rgba(99, 102, 241, 0.1)',
         tension: 0.4,
         fill: true,
-        pointRadius: 5,
-        pointHoverRadius: 8
+        pointRadius: props.data.length > 50 ? 0 : 4, // Hide points if data is dense
+        pointHoverRadius: 6
     }]
 }));
 
@@ -46,15 +32,20 @@ const options = {
     responsive: true,
     maintainAspectRatio: false,
     plugins: {
-        legend: { display: false }, // Cleaner look for your tech aesthetic
+        legend: { display: false },
         tooltip: {
             backgroundColor: '#0f172a',
             titleColor: '#6366f1',
             bodyColor: '#fff',
-            padding: 12,
-            borderColor: 'rgba(255,255,255,0.1)',
-            borderWidth: 1,
-            displayColors: false
+            // Customizing tooltip to look better with the raw date labels
+            callbacks: {
+                title: (items) => {
+                    const d = new Date(items[0].label);
+                    return d.toLocaleString('en-PH', { 
+                        month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' 
+                    });
+                }
+            }
         }
     },
     scales: {
@@ -66,7 +57,30 @@ const options = {
         },
         x: { 
             grid: { display: false },
-            ticks: { color: '#64748b', font: { size: 10 } }
+            ticks: {
+                maxRotation: 0,
+                autoSkip: true,
+                maxTicksLimit: 8, // Keeps the chart from looking cluttered
+                callback: function(val, index) {
+                    const rawLabel = this.getLabelForValue(val);
+                    const date = new Date(rawLabel);
+                    
+                    // Logic to check if we are spanning multiple days
+                    const isMultiDay = props.data.length > 0 && 
+                        new Date(props.data[0].created_at).toDateString() !== 
+                        new Date(props.data[props.data.length - 1].created_at).toDateString();
+
+                    if (isMultiDay) {
+                        return date.toLocaleDateString('en-PH', { month: 'short', day: 'numeric' });
+                    } else {
+                        return date.toLocaleTimeString('en-PH', { 
+                            hour: 'numeric', minute: '2-digit', hour12: true 
+                        });
+                    }
+                },
+                color: '#64748b',
+                font: { size: 10, weight: 'bold' }
+            }
         }
     }
 };

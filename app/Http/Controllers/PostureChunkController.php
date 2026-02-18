@@ -86,4 +86,18 @@ class PostureChunkController extends Controller
         // 4. Clean redirect
         return redirect()->back(303);
     }
+    
+    public function destroySession($id)
+    {
+        // Direct lookup restricted to the logged-in user
+        $chunk = PostureChunk::where('user_id', Auth::id())->find($id);
+
+        if (!$chunk) {
+            return redirect()->back()->with('error', 'Session not found.');
+        }
+
+        $chunk->delete();
+
+        return redirect()->back()->with('message', 'Session removed from history.');
+    }
     }

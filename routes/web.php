@@ -43,6 +43,10 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::get('/dashboard', [PostureChunkController::class, 'index'])->name('dashboard');
     Route::get('/dashboard', [DashboardController::class, 'index'])->name('dashboard');
 
+    // --- DELETE SESSION ---
+    Route::delete('/posture-chunks/{id}', [PostureChunkController::class, 'destroySession'])
+    ->name('posture-chunks.destroy');
+
     // --- THE CAMERA PAGE ---
     Route::get('/camera', function () {
         return Inertia::render('PostureCamera');

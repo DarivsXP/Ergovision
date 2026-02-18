@@ -30,7 +30,7 @@ class DashboardController extends Controller
             $period = '7d';
         }
 
-        $chunks = $query->orderBy('created_at', 'desc')->get();
+        $chunks = $query->orderBy('created_at', 'asc')->get();
 
         // 2. Calculate Stats based on the filtered data
         $totalSeconds = $chunks->sum('duration_seconds');
