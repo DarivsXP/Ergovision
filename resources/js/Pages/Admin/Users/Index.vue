@@ -1,34 +1,32 @@
 <script setup>
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
 import { Head, Link, router } from '@inertiajs/vue3';
-import { ref, watch } from 'vue'; // <--- Import ref and watch
+import { ref, watch } from 'vue';
 
 const props = defineProps({
     users: Object,
-    filters: Object // <--- Accept the filters prop from Laravel
+    filters: Object
 });
 
-// 1. Initialize search with the existing value (if any)
 const search = ref(props.filters?.search || '');
-
-// 2. Watch for changes (with a small delay to avoid lag)
 let timeout = null;
 
 watch(search, (value) => {
     clearTimeout(timeout);
     timeout = setTimeout(() => {
         router.get(route('admin.users.index'), { search: value }, {
-            preserveState: true, // Don't reload the page completely
-            replace: true,       // Don't clutter browser history
-            preserveScroll: true // Stay at the same scroll position
+            preserveState: true,
+            replace: true,
+            preserveScroll: true
         });
-    }, 300); // Wait 300ms after you stop typing
+    }, 300);
 });
 
-// ... keep your deleteUser function here ...
 const deleteUser = (user) => {
-    if (confirm(`Are you sure you want to delete ${user.name}?`)) {
-        router.delete(route('admin.users.destroy', user.id));
+    if (confirm(`Are you sure you want to delete ${user.name}? This cannot be undone.`)) {
+        router.delete(route('admin.users.destroy', user.id), {
+            preserveScroll: true,
+        });
     }
 };
 </script>
@@ -43,9 +41,9 @@ const deleteUser = (user) => {
                     User <span class="text-indigo-500">Management</span>
                 </h2>
                 
-                <button class="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg text-xs font-bold uppercase tracking-widest transition shadow-lg shadow-indigo-500/20">
+                <Link :href="route('register')" class="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg text-xs font-bold uppercase tracking-widest transition shadow-lg shadow-indigo-500/20">
                     + Add New User
-                </button>
+                </Link>
             </div>
         </template>
 
@@ -57,10 +55,8 @@ const deleteUser = (user) => {
                         <h4 class="text-white font-bold tracking-tight">System Roster ({{ users.total }})</h4>
                         
                         <div class="relative">
-                            <input v-model="search" 
-       type="text" 
-       placeholder="Search users..." 
-       class="bg-slate-950 border border-slate-800 text-slate-300 text-sm rounded-full focus:ring-indigo-500 focus:border-indigo-500 block w-64 pl-4 p-2.5 placeholder-slate-600 transition">
+                            <input v-model="search" type="text" placeholder="Search users..." 
+                                   class="bg-slate-950 border border-slate-800 text-slate-300 text-sm rounded-full focus:ring-indigo-500 focus:border-indigo-500 block w-64 pl-4 p-2.5 placeholder-slate-600 transition">
                         </div>
                     </div>
 
@@ -83,7 +79,7 @@ const deleteUser = (user) => {
                                     <td class="p-5">
                                         <div class="flex items-center gap-3">
                                             <div class="h-8 w-8 rounded-full bg-gradient-to-br from-slate-700 to-slate-800 flex items-center justify-center text-xs font-bold text-white shadow-inner">
-                                                {{ user.name.charAt(0) }}
+                                                {{ user.name.charAt(0).toUpperCase() }}
                                             </div>
                                             <span class="text-white font-medium group-hover:text-indigo-400 transition">{{ user.name }}</span>
                                         </div>
@@ -103,6 +99,10 @@ const deleteUser = (user) => {
                                     <td class="p-5 text-slate-500 text-xs">{{ new Date(user.created_at).toLocaleDateString() }}</td>
                                     
                                     <td class="p-5 text-right">
+                                        <Link :href="route('admin.users.show', user.id)" class="text-sky-400 hover:text-white transition font-bold text-xs uppercase tracking-tighter mr-4">
+                                            View
+                                        </Link>
+
                                         <Link :href="route('admin.users.edit', user.id)" class="text-indigo-400 hover:text-white transition font-bold text-xs uppercase tracking-tighter mr-4">
                                             Edit
                                         </Link>

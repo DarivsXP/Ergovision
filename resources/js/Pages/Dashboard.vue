@@ -47,13 +47,14 @@ const updateView = (params) => {
 
 const handlePeriodChange = (period) => {
     activePeriod.value = period;
+    selectedDate.value = null;
     updateView({ period });
 };
 
 const handleDateChange = (date) => {
     if (!date) return;
     selectedDate.value = date;
-    activePeriod.value = null;
+    activePeriod.value = null; 
     updateView({ date });
 };
 
