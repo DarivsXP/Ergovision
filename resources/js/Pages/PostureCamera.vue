@@ -29,6 +29,7 @@ const angles = ref({ neck: 0, back: 0 });
 const myIdealBack = ref(0);
 const myIdealNeck = ref(0);
 const calibrationBuffer = ref([]);
+const scoreHistory = ref([]);
 
 // --- Audio ---
 const alertSound = new Audio('/sounds/alert.mp3');
@@ -211,7 +212,7 @@ const lockNeutralPosition = () => {
 const onResults = async (results) => {
     const now = Date.now();
     
-    // 1. Check if landmarks exist
+    // 1. Detect Landmarks
     if (!results.poseLandmarks || results.poseLandmarks.length < 25) {
         isDetected.value = false;
         statusMessage.value = "Searching for body...";
@@ -220,10 +221,9 @@ const onResults = async (results) => {
 
     const lm = results.poseLandmarks;
 
-    // 2. Strict Body Visibility Check (MediaPipe 0.0 to 1.0)
-    // If visibility is too low, the person is likely missing or lighting is poor.
+    // 2. Visibility & Standing Check
     const visibilityThreshold = 0.5;
-    const requiredLandmarks = [8, 12, 24, 23, 11, 7]; // Ears, Shoulders, Hips
+    const requiredLandmarks = [8, 12, 24, 23, 11, 7]; 
     const isVisible = requiredLandmarks.every(id => lm[id].visibility > visibilityThreshold);
 
     if (!isVisible) {
@@ -232,18 +232,16 @@ const onResults = async (results) => {
         return;
     }
 
-    // 3. Standing Detection
-    // In sit-down ergonomics, if the hips (Y-axis) are in the top 40% of the screen, 
-    // the user is likely standing or walking away.
+    // Standing Detection (Hips too high in frame)
     if (lm[24].y < 0.4) {
         isDetected.value = true; 
-        statusMessage.value = "Standing Detected - Paused";
+        statusMessage.value = "Standing - Paused";
         return; 
     }
 
     isDetected.value = true;
 
-    // Throttle AI hits to ~5 per second to prevent lag
+    // Throttle AI hits to ~5 per second
     if (now - lastProcessTime < 200) return;
     lastProcessTime = now;
 
@@ -254,36 +252,46 @@ const onResults = async (results) => {
             ideal_neck: myIdealNeck.value
         });
 
-        // Handle Status from Python (user_not_detected, standing, active)
-        if (res.data.status !== 'active' && res.data.status !== 'standing') {
+        if (res.data.status !== 'active') {
              statusMessage.value = res.data.message;
              return;
         }
 
         angles.value = res.data.angles;
 
-        // Calibration logic
+        // --- CALIBRATION QUALITY CONTROL ---
         if (isLocking.value) {
-            calibrationBuffer.value.push(res.data.angles);
-            if (calibrationBuffer.value.length > 15) calibrationBuffer.value.shift();
+            // If AI detects a slouch DURING the 5s lock, warn the user
+            if (res.data.label === 1) {
+                statusMessage.value = "Sit Straighter!";
+                // We don't save bad readings to the buffer
+            } else {
+                calibrationBuffer.value.push(res.data.angles);
+                if (calibrationBuffer.value.length > 15) calibrationBuffer.value.shift();
+            }
         }
 
+        // --- MONITORING LOGIC ---
         if (isCalibrated.value) {
-            // --- SMOOTHING LOGIC (Moving Average) ---
-            // We take the last 5 scores from the AI and average them to stop jitter.
-            scoreHistory.value.push(res.data.score);
+            const rawScore = res.data.score;
+
+            // [FIX] Smoothing Logic: Average the last 5 frames to stop the "100% stuck" jitter
+            scoreHistory.value.push(rawScore);
             if (scoreHistory.value.length > 5) scoreHistory.value.shift();
             
             const average = scoreHistory.value.reduce((a, b) => a + b, 0) / scoreHistory.value.length;
-            currentScore.value = Math.round(average);
+            const finalCalculatedScore = Math.round(average);
 
-            const aiSaysSlouch = res.data.label === 1;
-            const scoreIsFailing = currentScore.value < 75;
-            
-            isSlouching.value = aiSaysSlouch || scoreIsFailing;
+            // [FIX] Jitter Prevention: Only update UI if the score actually moves
+            if (Math.abs(currentScore.value - finalCalculatedScore) >= 1) {
+                currentScore.value = finalCalculatedScore;
+            }
+
+            // Sync Slouching state
+            isSlouching.value = res.data.label === 1 || currentScore.value < 75;
             handleAdaptiveFeedback(isSlouching.value);
 
-            // Record session telemetry
+            // Telemetry
             sessionData.value.scores.push(currentScore.value);
             sessionData.value.totalFrames++;
             if (isSlouching.value) sessionData.value.slouchFrames++;
