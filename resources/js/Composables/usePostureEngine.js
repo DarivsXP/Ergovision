@@ -20,13 +20,18 @@ export function usePostureEngine(videoRef, toast) {
     const angles = ref({ neck: 0, back: 0 });
     const scoreHistory = ref([]);
 
-    // Internal Controllers
+    // --- Audio Assets ---
+    const alertSound = new Audio('/sounds/alert.mp3');
+    const successSound = new Audio('/sounds/success.mp3');
+
+    // Internal Logic State
     let myIdealBack = 0;
     let myIdealNeck = 0;
     let calibrationBuffer = [];
     let chunkStartTime = Date.now();
     let lastProcessTime = 0;
-    let durationInterval = null;
+    let slouchStartTime = null;
+    let lastNotificationTime = 0;
     let uploadInterval = null;
 
     const sessionData = ref({ scores: [], slouchFrames: 0, totalFrames: 0, alerts: 0 });
@@ -37,6 +42,40 @@ export function usePostureEngine(videoRef, toast) {
         return `${m}:${s}`;
     });
 
+    // --- Feedback Logic (Paper Alignment) ---
+    const handleAdaptiveFeedback = (slouching) => {
+        if (slouching) {
+            if (!slouchStartTime) slouchStartTime = Date.now();
+            const duration = (Date.now() - slouchStartTime) / 1000;
+
+            if (duration >= 15) {
+                statusMessage.value = "CRITICAL: SIT UP!";
+                if (Date.now() - lastNotificationTime > 15000) {
+                    if (Notification.permission === "granted") {
+                        new Notification("Posture Alert", { body: "Please sit up straight immediately!" });
+                    }
+                    alertSound.play().catch(() => { });
+                    sessionData.value.alerts++;
+                    lastNotificationTime = Date.now();
+                    toast.error("Critical slouch detected!", "Posture Alert");
+                }
+            } else if (duration >= 5) {
+                statusMessage.value = "Warning: Adjust Posture";
+            } else {
+                statusMessage.value = "Slouching Detected";
+            }
+        } else {
+            if (slouchStartTime && (Date.now() - slouchStartTime) / 1000 > 5) {
+                successSound.play().catch(() => { });
+                statusMessage.value = "Great Correction!";
+                setTimeout(() => { if (!isSlouching.value) statusMessage.value = "Good Posture"; }, 2000);
+            } else {
+                statusMessage.value = "Good Posture";
+            }
+            slouchStartTime = null;
+        }
+    };
+
     const uploadSessionData = () => {
         if (sessionData.value.totalFrames === 0) return;
         const now = Date.now();
@@ -45,7 +84,8 @@ export function usePostureEngine(videoRef, toast) {
 
         const count = sessionData.value.scores.length || 1;
         const avgScore = Math.round(sessionData.value.scores.reduce((a, b) => a + b, 0) / count);
-        const slouchSecs = Math.round((sessionData.value.slouchFrames / sessionData.value.totalFrames) * actualDuration);
+        const slouchRatio = sessionData.value.slouchFrames / sessionData.value.totalFrames;
+        const slouchSecs = Math.round(slouchRatio * actualDuration);
 
         router.post('/posture-chunks', {
             score: avgScore,
@@ -54,7 +94,9 @@ export function usePostureEngine(videoRef, toast) {
             alert_count: sessionData.value.alerts
         }, {
             preserveScroll: true,
-            onSuccess: () => { sessionData.value = { scores: [], slouchFrames: 0, totalFrames: 0, alerts: 0 }; }
+            onSuccess: () => {
+                sessionData.value = { scores: [], slouchFrames: 0, totalFrames: 0, alerts: 0 };
+            }
         });
     };
 
@@ -98,19 +140,25 @@ export function usePostureEngine(videoRef, toast) {
             if (isCalibrated.value) {
                 scoreHistory.value.push(res.data.score);
                 if (scoreHistory.value.length > 5) scoreHistory.value.shift();
-                const avg = scoreHistory.value.reduce((a, b) => a + b, 0) / scoreHistory.value.length;
 
+                const avg = scoreHistory.value.reduce((a, b) => a + b, 0) / scoreHistory.value.length;
                 const finalScore = Math.round(avg);
-                if (Math.abs(currentScore.value - finalScore) >= 1) currentScore.value = finalScore;
+
+                // Jitter Prevention
+                if (Math.abs(currentScore.value - finalScore) >= 1) {
+                    currentScore.value = finalScore;
+                }
 
                 isSlouching.value = res.data.label === 1 || currentScore.value < 75;
-                statusMessage.value = isSlouching.value ? "Slouching Detected" : "Good Posture";
+                handleAdaptiveFeedback(isSlouching.value);
 
                 sessionData.value.scores.push(currentScore.value);
                 sessionData.value.totalFrames++;
                 if (isSlouching.value) sessionData.value.slouchFrames++;
             }
-        } catch (e) { statusMessage.value = "AI Offline"; }
+        } catch (e) {
+            statusMessage.value = "AI Offline";
+        }
     };
 
     const triggerCalibration = () => {
@@ -118,7 +166,9 @@ export function usePostureEngine(videoRef, toast) {
         calibrationCountdown.value = 5;
         calibrationBuffer = [];
         const timer = setInterval(() => {
-            if (statusMessage.value !== "BAD POSTURE DETECTED") calibrationCountdown.value--;
+            if (statusMessage.value !== "BAD POSTURE DETECTED") {
+                calibrationCountdown.value--;
+            }
             if (calibrationCountdown.value <= 0) {
                 clearInterval(timer);
                 lockNeutralPosition();
@@ -129,28 +179,29 @@ export function usePostureEngine(videoRef, toast) {
     const lockNeutralPosition = () => {
         if (calibrationBuffer.length < 5) {
             isLocking.value = false;
-            toast.error("Calibration failed. Sit straight.");
+            toast.error("Calibration failed. Please sit straight.");
             return;
         }
         myIdealBack = calibrationBuffer.reduce((a, b) => a + b.back, 0) / calibrationBuffer.length;
         myIdealNeck = calibrationBuffer.reduce((a, b) => a + b.neck, 0) / calibrationBuffer.length;
+
         isCalibrated.value = true;
         isLocking.value = false;
-        toast.success("Monitoring started!");
+        toast.success("Calibration complete!");
+        successSound.play().catch(() => { });
 
         chunkStartTime = Date.now();
         uploadInterval = setInterval(uploadSessionData, 30000);
     };
 
     const cleanup = () => {
-        clearInterval(durationInterval);
-        clearInterval(uploadInterval);
+        if (uploadInterval) clearInterval(uploadInterval);
         if (isCalibrated.value) uploadSessionData();
     };
 
     return {
         isCameraOn, isDetected, isCalibrated, isLocking, calibrationCountdown,
         currentScore, isSlouching, statusMessage, formattedDuration, angles,
-        onResults, triggerCalibration, sessionDurationSecs, durationInterval, cleanup
+        onResults, triggerCalibration, sessionDurationSecs, cleanup
     };
 }
