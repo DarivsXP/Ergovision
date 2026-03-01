@@ -38,19 +38,6 @@ const submit = () => {
         </div>
 
         <form @submit.prevent="submit" class="space-y-5">
-            <div>
-                <label for="email" class="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">Email</label>
-                <input 
-                    id="email" 
-                    type="email" 
-                    class="w-full bg-slate-900 border border-white/10 rounded-xl px-4 py-3 text-white focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all shadow-inner" 
-                    v-model="form.email" 
-                    required 
-                    autofocus 
-                    autocomplete="username" 
-                />
-                <InputError class="mt-2" :message="form.errors.email" />
-            </div>
 
             <div>
                 <label for="password" class="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">New Password</label>
@@ -84,7 +71,7 @@ const submit = () => {
                     class="w-full py-4 bg-indigo-600 hover:bg-indigo-500 text-white font-black rounded-2xl shadow-[0_0_20px_rgba(79,70,229,0.3)] transition-all uppercase tracking-widest text-xs disabled:opacity-50" 
                     :disabled="form.processing"
                 >
-                    Reset Password
+                    Confirm Reset Password
                 </button>
             </div>
         </form>
