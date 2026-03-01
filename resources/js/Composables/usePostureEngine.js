@@ -32,7 +32,11 @@ export function usePostureEngine(videoRef, toast) {
     let lastProcessTime = 0;
     let slouchStartTime = null;
     let lastNotificationTime = 0;
+
+    // Timer Variables
     let uploadInterval = null;
+    let activeTimer = null;
+    let chunkActiveSecs = 0; // Tracks actual time spent sitting in the current chunk
 
     const sessionData = ref({ scores: [], slouchFrames: 0, totalFrames: 0, alerts: 0 });
 
@@ -47,15 +51,10 @@ export function usePostureEngine(videoRef, toast) {
             if (!slouchStartTime) slouchStartTime = Date.now();
             const duration = (Date.now() - slouchStartTime) / 1000;
 
-            // 1. CRITICAL STATE (> 60 Seconds) - Forced Reset
             if (duration >= 60) {
                 statusMessage.value = "CRITICAL: POSTURAL RESET REQUIRED";
-                // In this state, we might even trigger a toast that doesn't disappear
                 toast.error("High-risk duration exceeded. Please stand up and reset.", { timeout: 0 });
-            }
-
-            // 2. ALERT STATE (15 - 60 Seconds) - Audible + Persistent UI
-            else if (duration >= 15) {
+            } else if (duration >= 15) {
                 statusMessage.value = "ALERT: SUSTAINED SLOUCH";
                 if (Date.now() - lastNotificationTime > 15000) {
                     if (Notification.permission === "granted") {
@@ -66,20 +65,12 @@ export function usePostureEngine(videoRef, toast) {
                     lastNotificationTime = Date.now();
                     toast.warning("Persistent deviation detected.");
                 }
-            }
-
-            // 3. WARNING STATE (5 - 15 Seconds) - Visual Cues Only
-            else if (duration >= 5) {
+            } else if (duration >= 5) {
                 statusMessage.value = "WARNING: DRIFT DETECTED";
-                // This is where your UI color change (red ring) should be most visible
-            }
-
-            // 4. STABLE STATE (0 - 5 Seconds) - Monitoring / Buffer
-            else {
+            } else {
                 statusMessage.value = "Monitoring Threshold...";
             }
         } else {
-            // Positive Reinforcement / Reset Logic
             if (slouchStartTime && (Date.now() - slouchStartTime) / 1000 > 5) {
                 successSound.play().catch(() => { });
                 statusMessage.value = "Stable State Restored";
@@ -91,20 +82,22 @@ export function usePostureEngine(videoRef, toast) {
     };
 
     const uploadSessionData = () => {
-        if (sessionData.value.totalFrames === 0) return;
-        const now = Date.now();
-        const actualDuration = Math.round((now - chunkStartTime) / 1000);
-        chunkStartTime = now;
+        // [SMART PAUSE] Do not upload if they were gone for the whole 30s chunk
+        if (sessionData.value.totalFrames === 0 || chunkActiveSecs === 0) return;
+
+        const durationToLog = chunkActiveSecs;
+        chunkActiveSecs = 0;
+        chunkStartTime = Date.now();
 
         const count = sessionData.value.scores.length || 1;
         const avgScore = Math.round(sessionData.value.scores.reduce((a, b) => a + b, 0) / count);
         const slouchRatio = sessionData.value.slouchFrames / sessionData.value.totalFrames;
-        const slouchSecs = Math.round(slouchRatio * actualDuration);
+        const slouchSecs = Math.round(slouchRatio * durationToLog);
 
         router.post('/posture-chunks', {
             score: avgScore,
             slouch_duration: slouchSecs,
-            duration_seconds: actualDuration,
+            duration_seconds: durationToLog,
             alert_count: sessionData.value.alerts
         }, {
             preserveScroll: true,
@@ -158,7 +151,6 @@ export function usePostureEngine(videoRef, toast) {
                 const avg = scoreHistory.value.reduce((a, b) => a + b, 0) / scoreHistory.value.length;
                 const finalScore = Math.round(avg);
 
-                // Jitter Prevention
                 if (Math.abs(currentScore.value - finalScore) >= 1) {
                     currentScore.value = finalScore;
                 }
@@ -204,11 +196,26 @@ export function usePostureEngine(videoRef, toast) {
         toast.success("Calibration complete!");
         successSound.play().catch(() => { });
 
+        // [SMART PAUSE] Start timers
+        if (activeTimer) clearInterval(activeTimer);
+        if (uploadInterval) clearInterval(uploadInterval);
+
         chunkStartTime = Date.now();
+        chunkActiveSecs = 0;
+
+        activeTimer = setInterval(() => {
+            // Only increment time if user is physically detected and sitting
+            if (isCalibrated.value && isDetected.value && statusMessage.value !== "Standing - Paused") {
+                sessionDurationSecs.value++;
+                chunkActiveSecs++;
+            }
+        }, 1000);
+
         uploadInterval = setInterval(uploadSessionData, 30000);
     };
 
     const cleanup = () => {
+        if (activeTimer) clearInterval(activeTimer);
         if (uploadInterval) clearInterval(uploadInterval);
         if (isCalibrated.value) uploadSessionData();
     };
