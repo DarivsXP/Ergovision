@@ -42,35 +42,49 @@ export function usePostureEngine(videoRef, toast) {
         return `${m}:${s}`;
     });
 
-    // --- Feedback Logic (Paper Alignment) ---
     const handleAdaptiveFeedback = (slouching) => {
         if (slouching) {
             if (!slouchStartTime) slouchStartTime = Date.now();
             const duration = (Date.now() - slouchStartTime) / 1000;
 
-            if (duration >= 15) {
-                statusMessage.value = "CRITICAL: SIT UP!";
+            // 1. CRITICAL STATE (> 60 Seconds) - Forced Reset
+            if (duration >= 60) {
+                statusMessage.value = "CRITICAL: POSTURAL RESET REQUIRED";
+                // In this state, we might even trigger a toast that doesn't disappear
+                toast.error("High-risk duration exceeded. Please stand up and reset.", { timeout: 0 });
+            }
+
+            // 2. ALERT STATE (15 - 60 Seconds) - Audible + Persistent UI
+            else if (duration >= 15) {
+                statusMessage.value = "ALERT: SUSTAINED SLOUCH";
                 if (Date.now() - lastNotificationTime > 15000) {
                     if (Notification.permission === "granted") {
-                        new Notification("Posture Alert", { body: "Please sit up straight immediately!" });
+                        new Notification("Posture Alert", { body: "Audible Intervention Triggered." });
                     }
                     alertSound.play().catch(() => { });
                     sessionData.value.alerts++;
                     lastNotificationTime = Date.now();
-                    toast.error("Critical slouch detected!", "Posture Alert");
+                    toast.warning("Persistent deviation detected.");
                 }
-            } else if (duration >= 5) {
-                statusMessage.value = "Warning: Adjust Posture";
-            } else {
-                statusMessage.value = "Slouching Detected";
+            }
+
+            // 3. WARNING STATE (5 - 15 Seconds) - Visual Cues Only
+            else if (duration >= 5) {
+                statusMessage.value = "WARNING: DRIFT DETECTED";
+                // This is where your UI color change (red ring) should be most visible
+            }
+
+            // 4. STABLE STATE (0 - 5 Seconds) - Monitoring / Buffer
+            else {
+                statusMessage.value = "Monitoring Threshold...";
             }
         } else {
+            // Positive Reinforcement / Reset Logic
             if (slouchStartTime && (Date.now() - slouchStartTime) / 1000 > 5) {
                 successSound.play().catch(() => { });
-                statusMessage.value = "Great Correction!";
-                setTimeout(() => { if (!isSlouching.value) statusMessage.value = "Good Posture"; }, 2000);
+                statusMessage.value = "Stable State Restored";
             } else {
-                statusMessage.value = "Good Posture";
+                statusMessage.value = "Stable State";
             }
             slouchStartTime = null;
         }

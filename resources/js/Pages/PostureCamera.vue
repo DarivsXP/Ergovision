@@ -64,7 +64,12 @@ onUnmounted(() => stopCamera());
                 </div>
 
                 <div class="relative w-full aspect-video bg-black rounded-[3rem] overflow-hidden shadow-2xl border border-white/5"
-                     :class="{'ring-4 ring-rose-500 shadow-rose-900/20': statusMessage === 'BAD POSTURE DETECTED'}">
+                     :class="{
+                        'ring-4 ring-emerald-500/50': statusMessage === 'Stable State',
+                        'ring-4 ring-amber-500/50 animate-pulse': statusMessage === 'WARNING: DRIFT DETECTED',
+                        'ring-4 ring-rose-500 shadow-rose-900/40': statusMessage === 'ALERT: SUSTAINED SLOUCH',
+                        'ring-8 ring-rose-700 shadow-2xl': statusMessage === 'CRITICAL: POSTURAL RESET REQUIRED'    
+                     }">
                     
                     <video ref="videoRef" class="w-full h-full object-cover scale-x-[-1]" autoplay playsinline></video>
 
