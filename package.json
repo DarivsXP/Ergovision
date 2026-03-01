@@ -22,6 +22,8 @@
     },
     "dependencies": {
         "chart.js": "^4.5.1",
+        "jspdf": "^4.2.0",
+        "jspdf-autotable": "^5.0.7",
         "vue-chartjs": "^5.3.3"
     }
 }
