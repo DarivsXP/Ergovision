@@ -40,6 +40,12 @@ class HandleInertiaRequests extends Middleware
                     'email' => $request->user()->email,
                     'is_admin' => (bool) $request->user()->is_admin,
                     'avatar' => $request->user()->avatar ?? null, 
+                    'occupation' => $request->user()->occupation,
+                    'age' => $request->user()->age,
+                    'daily_sitting_hours' => $request->user()->daily_sitting_hours,
+                    'has_musculoskeletal_issues' => $request->user()->has_musculoskeletal_issues,
+                    'musculoskeletal_details' => $request->user()->musculoskeletal_details,
+                    'is_onboarded' => $request->user()->is_onboarded,
                 ] : null,
             ],
 

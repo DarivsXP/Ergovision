@@ -20,14 +20,17 @@ class User extends Authenticatable
      *
      * @var list<string>
      */
-    protected $fillable = [
+protected $fillable = [
         'name',
         'email',
         'password',
-        'google_id',
-        'avatar',
-        'user_type',
-        'is_admin', // [ADDED] Required for Admin functionality
+        'google_id', 
+        'occupation',
+        'age',
+        'daily_sitting_hours',
+        'has_musculoskeletal_issues',
+        'musculoskeletal_details',
+        'is_onboarded',
     ];
 
     /**

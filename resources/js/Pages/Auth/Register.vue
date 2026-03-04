@@ -11,9 +11,9 @@ const showPassword = ref(false);
 const form = useForm({
     name: '',
     email: '',
-    user_type: '', 
     password: '',
     password_confirmation: '',
+    terms: false, 
 });
 
 const submit = () => {
@@ -21,9 +21,7 @@ const submit = () => {
     
     form.post(route('register'), {
         preserveScroll: true,
-        // Resets password fields only on a finished request
         onFinish: () => form.reset('password', 'password_confirmation'),
-        // Success and Error handlers to help debug redirection
         onSuccess: () => console.log('Account created successfully.'),
         onError: (errors) => console.error('Registration errors:', errors),
     });
@@ -91,22 +89,6 @@ const submit = () => {
                     </div>
 
                     <div class="space-y-1">
-                        <InputLabel for="user_type" value="I am a..." class="text-slate-700 font-bold" />
-                        <select
-                            id="user_type"
-                            class="block w-full rounded-xl border-slate-400 shadow-sm focus:border-indigo-600 focus:ring-indigo-600 sm:text-sm py-3 px-4 bg-white text-slate-900 font-medium transition-all"
-                            v-model="form.user_type"
-                            required
-                        >
-                            <option value="" disabled>Select your role</option>
-                            <option value="student">Student</option>
-                            <option value="worker">Office Professional</option>
-                            <option value="other">Other</option>
-                        </select>
-                        <InputError :message="form.errors.user_type" class="mt-1 font-bold text-xs" />
-                    </div>
-
-                    <div class="space-y-1">
                         <div class="flex items-center justify-between px-1">
                             <InputLabel for="password" value="Password" class="text-slate-700 font-bold" />
                             <button 
@@ -141,6 +123,25 @@ const submit = () => {
                             placeholder="Repeat password"
                         />
                         <InputError :message="form.errors.password_confirmation" class="mt-1 font-bold text-xs" />
+                    </div>
+
+                    <div class="space-y-2 pt-2 pb-1">
+                        <label for="terms" class="flex items-start gap-3 cursor-pointer group">
+                            <input 
+                                id="terms" 
+                                type="checkbox" 
+                                v-model="form.terms"
+                                required 
+                                class="mt-0.5 w-4 h-4 shrink-0 bg-white border-slate-300 rounded text-indigo-600 focus:ring-indigo-600 cursor-pointer transition-colors group-hover:border-indigo-400"
+                            >
+                            <span class="text-[11px] text-slate-500 uppercase tracking-wider leading-relaxed font-medium">
+                                I agree to the 
+                                <a :href="route('terms')" target="_blank" class="text-indigo-600 hover:text-indigo-500 underline decoration-indigo-200 underline-offset-2">Terms of Service</a> 
+                                and 
+                                <a :href="route('privacy')" target="_blank" class="text-indigo-600 hover:text-indigo-500 underline decoration-indigo-200 underline-offset-2">Privacy Policy</a>.
+                            </span>
+                        </label>
+                        <InputError :message="form.errors.terms" class="mt-1 font-bold text-xs" />
                     </div>
 
                     <PrimaryButton

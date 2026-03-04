@@ -25,6 +25,12 @@ class ProfileUpdateRequest extends FormRequest
                 'max:255',
                 Rule::unique(User::class)->ignore($this->user()->id),
             ],
+            // New demographic and ergonomic research fields
+            'occupation' => ['required', 'string', 'max:255'],
+            'age' => ['required', 'integer', 'min:13', 'max:100'],
+            'daily_sitting_hours' => ['required', 'integer', 'min:0', 'max:13'],
+            'has_musculoskeletal_issues' => ['required', 'boolean'],
+            'musculoskeletal_details' => ['nullable', 'string', 'max:1000'],
         ];
     }
 }
