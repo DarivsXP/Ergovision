@@ -19,7 +19,6 @@ return new class extends Migration
             $table->integer('score');           // Average score (0-100) for the chunk
             $table->integer('slouch_duration'); // Total seconds slouching in the chunk
             
-            // --- NEW COLUMN ADDED HERE ---
             $table->integer('duration_seconds')->default(30); // Actual length of this session chunk
             
             $table->integer('alert_count');     // Total alerts triggered in the chunk
