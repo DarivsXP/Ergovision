@@ -5,7 +5,6 @@ npm install --legacy-peer-deps
 npm run build
 
 echo "--- DATABASE MIGRATION ---"
-# The --force flag is required in production so it doesn't get stuck asking "Are you sure?"
 php artisan migrate --force
 
 echo "--- MINIMALIST DEPLOY ---"
