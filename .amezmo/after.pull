@@ -1,5 +1,10 @@
 #!/bin/bash
 
+echo "--- FIXING LOG DIRECTORIES ---"
+mkdir -p storage/logs
+touch storage/logs/laravel.log
+chmod -R 775 storage bootstrap/cache
+
 echo "--- FRONTEND BUILD (VUE/VITE) ---"
 npm install --legacy-peer-deps
 npm run build
