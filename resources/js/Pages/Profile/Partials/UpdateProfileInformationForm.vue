@@ -89,8 +89,8 @@ const submit = () => {
                 >
                     <option value="" disabled>Select Role...</option>
                     <option value="Student">Student</option>
-                    <option value="Office Professional">Office Professional</option>
-                    <option value="Digital Hobbyist">Digital Hobbyist</option> 
+                    <option value="Office Professional">Office Professional</option>         
+                    <option value="Recreational User">Recreational User</option> 
                 </select>
                 <InputError class="mt-2" :message="form.errors.occupation" />
             </div>

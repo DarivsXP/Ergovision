@@ -7,7 +7,6 @@ use App\Models\User;
 use Illuminate\Auth\Events\Registered;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Validation\Rules;
 use Inertia\Inertia;
@@ -23,7 +22,7 @@ class RegisteredUserController extends Controller
         return Inertia::render('Auth/Register');
     }
 
-/**
+    /**
      * Handle an incoming registration request.
      *
      * @throws \Illuminate\Validation\ValidationException
@@ -33,23 +32,19 @@ class RegisteredUserController extends Controller
         $request->validate([
             'name' => 'required|string|max:255',
             'email' => 'required|string|lowercase|email|max:255|unique:'.User::class,
-            // [NEW] Add validation for user_type
-            'user_type' => 'required|string|in:student,worker,other',
             'password' => ['required', 'confirmed', Rules\Password::defaults()],
+            'terms' => 'accepted', // [NEW] Validates that the Terms checkbox was ticked!
         ]);
 
         $user = User::create([
             'name' => $request->name,
             'email' => $request->email,
-            // [NEW] Save the user_type
-            'user_type' => $request->user_type,
             'password' => Hash::make($request->password),
         ]);
 
         event(new Registered($user));
 
-        Auth::login($user);
-
-        return redirect(route('dashboard', absolute: false));
+        // Auto-login is removed, so we just redirect them cleanly to the login page.
+        return redirect()->route('login')->with('status', 'Account created successfully! Please log in.');
     }
 }

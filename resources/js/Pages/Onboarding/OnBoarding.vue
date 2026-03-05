@@ -8,6 +8,7 @@ const form = useForm({
     daily_sitting_hours: 8,
     has_musculoskeletal_issues: 'no',
     musculoskeletal_details: '',
+    terms: false,
 });
 
 const submit = () => {
@@ -120,6 +121,24 @@ const submit = () => {
                         <textarea v-model="form.musculoskeletal_details" rows="2" required
                             class="w-full bg-slate-950 border border-amber-500/20 rounded-xl px-4 py-3 text-white focus:ring-2 focus:ring-amber-500 transition-all resize-none"></textarea>
                     </div>
+                </div>
+
+                <div class="pt-6 border-t border-white/5">
+                    <label for="terms" class="flex items-start gap-3 cursor-pointer group">
+                        <input 
+                            id="terms" 
+                            type="checkbox" 
+                            v-model="form.terms"
+                            required 
+                            class="mt-0.5 w-4 h-4 shrink-0 bg-slate-950 border-white/10 rounded text-indigo-600 focus:ring-indigo-500 cursor-pointer transition-colors group-hover:border-indigo-400"
+                        >
+                        <span class="text-[11px] text-slate-400 uppercase tracking-wider leading-relaxed font-medium">
+                            I consent to participate in this academic study and agree to the 
+                            <a :href="route('terms')" target="_blank" class="text-indigo-500 hover:text-indigo-400 underline decoration-indigo-500/30 underline-offset-2">Terms of Service</a> 
+                            and 
+                            <a :href="route('privacy')" target="_blank" class="text-indigo-500 hover:text-indigo-400 underline decoration-indigo-500/30 underline-offset-2">Privacy Policy</a>.
+                        </span>
+                    </label>
                 </div>
 
                 <div class="pt-4">

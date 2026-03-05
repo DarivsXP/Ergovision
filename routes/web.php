@@ -7,6 +7,7 @@ use App\Http\Controllers\AdminController;
 use App\Http\Controllers\OnboardingController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Middleware\CheckOnboarding;
+use App\Http\Controllers\FeedbackController;
 use Illuminate\Support\Facades\Route;
 use Illuminate\Support\Facades\Auth;
 use Inertia\Inertia;
@@ -84,6 +85,8 @@ Route::middleware(['auth', 'verified', CheckOnboarding::class])->group(function 
     Route::get('/profile', [ProfileController::class, 'edit'])->name('profile.edit');
     Route::patch('/profile', [ProfileController::class, 'update'])->name('profile.update');
     Route::delete('/profile', [ProfileController::class, 'destroy'])->name('profile.destroy');
+
+    Route::post('/feedback', [FeedbackController::class, 'store'])->name('feedback.store');
 
     /*
     |----------------------------------------------------------------------
