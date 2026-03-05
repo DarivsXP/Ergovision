@@ -1,9 +1,14 @@
 #!/bin/bash
 
-echo "--- MINIMALIST DEPLOY ---"
+echo "--- FRONTEND BUILD (VUE/VITE) ---"
+# Install node modules and compile the Vue dashboard
+npm install --legacy-peer-deps
+npm run build
 
+echo "--- MINIMALIST DEPLOY ---"
 # 1. Clear Caches (This is safe and necessary)
 echo "Clearing Caches..."
+php artisan optimize:clear || true
 php artisan config:clear || true
 php artisan route:clear || true
 php artisan view:clear || true
