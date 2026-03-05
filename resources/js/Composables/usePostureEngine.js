@@ -2,9 +2,11 @@ import { ref, computed } from 'vue';
 import axios from 'axios';
 
 export function usePostureEngine(videoRef, toast) {
+    // --- Configuration ---
     const isLocal = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
     const AI_ENDPOINT = isLocal ? 'http://127.0.0.1:5000/predict' : 'https://ergovision-ai.onrender.com/predict';
 
+    // --- State ---
     const isCameraOn = ref(false);
     const isDetected = ref(false);
     const isCalibrated = ref(false);
@@ -17,8 +19,11 @@ export function usePostureEngine(videoRef, toast) {
     const angles = ref({ neck: 0, back: 0 });
     const scoreHistory = ref([]);
 
+    // --- Audio Assets ---
     const alertSound = new Audio('/sounds/alert.mp3');
+    const successSound = new Audio('/sounds/success.mp3');
 
+    // Internal Logic State
     let myIdealBack = 0;
     let myIdealNeck = 0;
     let calibrationBuffer = [];
@@ -27,6 +32,7 @@ export function usePostureEngine(videoRef, toast) {
     let slouchStartTime = null;
     let lastNotificationTime = 0;
 
+    // Timer Variables
     let uploadInterval = null;
     let activeTimer = null;
     let chunkActiveSecs = 0;
@@ -44,17 +50,15 @@ export function usePostureEngine(videoRef, toast) {
             if (!slouchStartTime) slouchStartTime = Date.now();
             const duration = (Date.now() - slouchStartTime) / 1000;
 
-            if (duration >= 15) {
+            if (duration >= 30) {
                 statusMessage.value = "CRITICAL: POSTURAL RESET REQUIRED";
-                if (Date.now() - lastNotificationTime > 8000) {
-                    alertSound.play().catch(() => console.log("Audio blocked"));
-                    sessionData.value.alerts++;
-                    lastNotificationTime = Date.now();
-                }
             } else if (duration >= 7) {
                 statusMessage.value = "ALERT: SUSTAINED SLOUCH";
                 if (Date.now() - lastNotificationTime > 10000) {
-                    alertSound.play().catch(() => console.log("Audio blocked"));
+                    // FIXED: Rewind audio so it reliably plays every 10 seconds
+                    alertSound.currentTime = 0;
+                    alertSound.play().catch(e => console.warn("Audio blocked:", e));
+
                     sessionData.value.alerts++;
                     lastNotificationTime = Date.now();
                     toast.warning("Persistent deviation detected.");
@@ -66,7 +70,7 @@ export function usePostureEngine(videoRef, toast) {
             }
         } else {
             statusMessage.value = "Stable State";
-            slouchStartTime = null;
+            slouchStartTime = null; // Clean reset
         }
     };
 
@@ -89,8 +93,10 @@ export function usePostureEngine(videoRef, toast) {
             alert_count: sessionData.value.alerts
         };
 
+        // Clear local array
         sessionData.value = { scores: [], slouchFrames: 0, totalFrames: 0, alerts: 0 };
 
+        // Silently sync with backend
         axios.post('/posture-chunks', payload).catch(err => {
             console.error("Failed to sync chunk", err);
         });
@@ -110,7 +116,7 @@ export function usePostureEngine(videoRef, toast) {
         if (lm[24].y < 0.4) { statusMessage.value = "Standing - Paused"; return; }
 
         isDetected.value = true;
-        if (now - lastProcessTime < 200) return;
+        if (now - lastProcessTime < 200) return; // Process at 5fps to save resources
         lastProcessTime = now;
 
         try {
@@ -134,18 +140,8 @@ export function usePostureEngine(videoRef, toast) {
             }
 
             if (isCalibrated.value) {
-                let rawScore = res.data.score;
-                const isLabeledSlouch = res.data.label === 1;
-
-                if (isLabeledSlouch && slouchStartTime) {
-                    const slouchDuration = (Date.now() - slouchStartTime) / 1000;
-                    const dynamicPenalty = Math.min(45, slouchDuration * 3);
-                    rawScore = Math.max(30, rawScore - dynamicPenalty);
-                } else if (isLabeledSlouch) {
-                    rawScore = Math.min(rawScore, 85);
-                }
-
-                scoreHistory.value.push(rawScore);
+                // RESTORED: Let the AI control the score natively without messy frontend manipulation
+                scoreHistory.value.push(res.data.score);
                 if (scoreHistory.value.length > 5) scoreHistory.value.shift();
 
                 const avg = scoreHistory.value.reduce((a, b) => a + b, 0) / scoreHistory.value.length;
@@ -155,7 +151,7 @@ export function usePostureEngine(videoRef, toast) {
                     currentScore.value = finalScore;
                 }
 
-                isSlouching.value = isLabeledSlouch || currentScore.value < 75;
+                isSlouching.value = res.data.label === 1 || currentScore.value < 75;
                 handleAdaptiveFeedback(isSlouching.value);
 
                 sessionData.value.scores.push(currentScore.value);
@@ -168,12 +164,15 @@ export function usePostureEngine(videoRef, toast) {
     };
 
     const triggerCalibration = () => {
-        alertSound.volume = 0.01;
-        alertSound.play().then(() => {
-            alertSound.pause();
-            alertSound.volume = 1;
-            alertSound.currentTime = 0;
-        }).catch(() => { });
+        // Brilliant trick to unlock browser autoplay policy! Applied to both sounds.
+        [alertSound, successSound].forEach(sound => {
+            sound.volume = 0.01;
+            sound.play().then(() => {
+                sound.pause();
+                sound.volume = 1;
+                sound.currentTime = 0;
+            }).catch(() => { });
+        });
 
         isLocking.value = true;
         calibrationCountdown.value = 5;
@@ -203,6 +202,10 @@ export function usePostureEngine(videoRef, toast) {
         isCalibrated.value = true;
         isLocking.value = false;
         toast.success("Calibration complete!");
+
+        // RESTORED: Play the success sound upon successful lock-in
+        successSound.currentTime = 0;
+        successSound.play().catch(e => console.warn("Audio blocked:", e));
 
         if (activeTimer) clearInterval(activeTimer);
         if (uploadInterval) clearInterval(uploadInterval);

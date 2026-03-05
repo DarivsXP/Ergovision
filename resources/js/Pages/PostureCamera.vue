@@ -189,7 +189,7 @@ const replayCameraTour = () => {
                         'opacity-50 grayscale': !isDetected || statusMessage === 'Standing - Paused'
                      }">
                     
-                    <video ref="videoRef" class="w-full h-full object-contain scale-x-[-1]" autoplay playsinline></video>
+                    <video ref="videoRef" class="w-full h-full object-cover scale-x-[-1]" autoplay playsinline></video>
 
                     <div v-if="isLocking" class="absolute inset-0 flex flex-col items-center justify-center bg-slate-950/90 backdrop-blur-md z-50">
                         <h2 class="text-[10rem] font-black leading-none" :class="statusMessage === 'BAD POSTURE DETECTED' ? 'text-rose-500' : 'text-white'">
