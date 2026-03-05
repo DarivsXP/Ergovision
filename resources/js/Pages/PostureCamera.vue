@@ -1,8 +1,10 @@
 <script setup>
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
 import { ref, onMounted, onUnmounted } from 'vue';
+import { router } from '@inertiajs/vue3'; // [NEW] Imported Inertia router
 import { useToast } from '@/Composables/useToast';
 import { usePostureEngine } from '@/Composables/usePostureEngine';
+import SessionFeedbackModal from '@/Components/SessionFeedbackModal.vue'; // [NEW] Imported the modal
 
 const videoRef = ref(null);
 const toast = useToast();
@@ -15,6 +17,9 @@ const {
 
 let pose = null;
 let camera = null;
+
+// [NEW] State for controlling the modal visibility
+const showFeedbackModal = ref(false);
 
 onMounted(() => {
     if (window.Pose) {
@@ -37,12 +42,39 @@ const startCamera = async () => {
 };
 
 const stopCamera = () => {
+    // 1. Clean up hardware and background processes
     if (camera) camera.stop();
     isCameraOn.value = false;
     cleanup();
+
+    // 2. The 1-Minute Rule
+    // (Pro tip: Change '60' to '5' if you want to test the modal quickly without waiting a full minute!)
+    if (sessionDurationSecs.value >= 60) {
+        showFeedbackModal.value = true;
+    } else {
+        router.visit(route('dashboard'));
+    }
 };
 
-onUnmounted(() => stopCamera());
+// [NEW] Handle the modal submission
+const handleFeedbackSubmission = (formData) => {
+    formData.post(route('feedback.store'), {
+        onSuccess: () => {
+            showFeedbackModal.value = false;
+        }
+    });
+};
+
+// [NEW] Handle the skip button
+const skipFeedback = () => {
+    showFeedbackModal.value = false;
+    router.visit(route('dashboard'));
+};
+
+onUnmounted(() => {
+    if (camera) camera.stop();
+    cleanup();
+});
 </script>
 
 <template>
@@ -119,6 +151,13 @@ onUnmounted(() => stopCamera());
                     </div>
                 </div>
             </div>
+            
+            <SessionFeedbackModal 
+                :show="showFeedbackModal" 
+                @close="skipFeedback" 
+                @submit="handleFeedbackSubmission" 
+            />
+
         </div>
     </AuthenticatedLayout>
 </template>

@@ -1,6 +1,5 @@
 import { ref, computed } from 'vue';
-import { router } from '@inertiajs/vue3';
-import axios from 'axios';
+import axios from 'axios'; // FIXED: Swapped Inertia for Axios
 
 export function usePostureEngine(videoRef, toast) {
     // --- Configuration ---
@@ -22,7 +21,7 @@ export function usePostureEngine(videoRef, toast) {
 
     // --- Audio Assets ---
     const alertSound = new Audio('/sounds/alert.mp3');
-    const successSound = new Audio('/sounds/success.mp3');
+    // REMOVED: successSound to stop the annoying audio spam
 
     // Internal Logic State
     let myIdealBack = 0;
@@ -36,7 +35,7 @@ export function usePostureEngine(videoRef, toast) {
     // Timer Variables
     let uploadInterval = null;
     let activeTimer = null;
-    let chunkActiveSecs = 0; // Tracks actual time spent sitting in the current chunk
+    let chunkActiveSecs = 0;
 
     const sessionData = ref({ scores: [], slouchFrames: 0, totalFrames: 0, alerts: 0 });
 
@@ -51,38 +50,28 @@ export function usePostureEngine(videoRef, toast) {
             if (!slouchStartTime) slouchStartTime = Date.now();
             const duration = (Date.now() - slouchStartTime) / 1000;
 
-            if (duration >= 60) {
+            if (duration >= 30) {
                 statusMessage.value = "CRITICAL: POSTURAL RESET REQUIRED";
-                toast.error("High-risk duration exceeded. Please stand up and reset.", { timeout: 0 });
-            } else if (duration >= 15) {
+            } else if (duration >= 7) { // TWEAKED: Lowered from 15s to 7s so it actually triggers
                 statusMessage.value = "ALERT: SUSTAINED SLOUCH";
-                if (Date.now() - lastNotificationTime > 15000) {
-                    if (Notification.permission === "granted") {
-                        new Notification("Posture Alert", { body: "Audible Intervention Triggered." });
-                    }
-                    alertSound.play().catch(() => { });
+                if (Date.now() - lastNotificationTime > 10000) { // Play every 10s while slouching
+                    alertSound.play().catch(() => { console.log("Audio blocked by browser") });
                     sessionData.value.alerts++;
                     lastNotificationTime = Date.now();
                     toast.warning("Persistent deviation detected.");
                 }
-            } else if (duration >= 5) {
+            } else if (duration >= 3) {
                 statusMessage.value = "WARNING: DRIFT DETECTED";
             } else {
                 statusMessage.value = "Monitoring Threshold...";
             }
         } else {
-            if (slouchStartTime && (Date.now() - slouchStartTime) / 1000 > 5) {
-                successSound.play().catch(() => { });
-                statusMessage.value = "Stable State Restored";
-            } else {
-                statusMessage.value = "Stable State";
-            }
-            slouchStartTime = null;
+            statusMessage.value = "Stable State";
+            slouchStartTime = null; // Clean reset, no annoying sounds!
         }
     };
 
     const uploadSessionData = () => {
-        // [SMART PAUSE] Do not upload if they were gone for the whole 30s chunk
         if (sessionData.value.totalFrames === 0 || chunkActiveSecs === 0) return;
 
         const durationToLog = chunkActiveSecs;
@@ -94,16 +83,19 @@ export function usePostureEngine(videoRef, toast) {
         const slouchRatio = sessionData.value.slouchFrames / sessionData.value.totalFrames;
         const slouchSecs = Math.round(slouchRatio * durationToLog);
 
-        router.post('/posture-chunks', {
+        const payload = {
             score: avgScore,
             slouch_duration: slouchSecs,
             duration_seconds: durationToLog,
             alert_count: sessionData.value.alerts
-        }, {
-            preserveScroll: true,
-            onSuccess: () => {
-                sessionData.value = { scores: [], slouchFrames: 0, totalFrames: 0, alerts: 0 };
-            }
+        };
+
+        // Clear local array
+        sessionData.value = { scores: [], slouchFrames: 0, totalFrames: 0, alerts: 0 };
+
+        // FIXED: Using Axios instead of Inertia prevents the 204 crash and UI hijacks
+        axios.post('/posture-chunks', payload).catch(err => {
+            console.error("Failed to sync chunk", err);
         });
     };
 
@@ -194,9 +186,7 @@ export function usePostureEngine(videoRef, toast) {
         isCalibrated.value = true;
         isLocking.value = false;
         toast.success("Calibration complete!");
-        successSound.play().catch(() => { });
 
-        // [SMART PAUSE] Start timers
         if (activeTimer) clearInterval(activeTimer);
         if (uploadInterval) clearInterval(uploadInterval);
 
@@ -204,7 +194,6 @@ export function usePostureEngine(videoRef, toast) {
         chunkActiveSecs = 0;
 
         activeTimer = setInterval(() => {
-            // Only increment time if user is physically detected and sitting
             if (isCalibrated.value && isDetected.value && statusMessage.value !== "Standing - Paused") {
                 sessionDurationSecs.value++;
                 chunkActiveSecs++;
