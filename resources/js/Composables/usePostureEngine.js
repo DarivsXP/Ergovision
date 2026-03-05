@@ -1,12 +1,10 @@
 import { ref, computed } from 'vue';
-import axios from 'axios'; // FIXED: Swapped Inertia for Axios
+import axios from 'axios';
 
 export function usePostureEngine(videoRef, toast) {
-    // --- Configuration ---
     const isLocal = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
     const AI_ENDPOINT = isLocal ? 'http://127.0.0.1:5000/predict' : 'https://ergovision-ai.onrender.com/predict';
 
-    // --- State ---
     const isCameraOn = ref(false);
     const isDetected = ref(false);
     const isCalibrated = ref(false);
@@ -19,11 +17,8 @@ export function usePostureEngine(videoRef, toast) {
     const angles = ref({ neck: 0, back: 0 });
     const scoreHistory = ref([]);
 
-    // --- Audio Assets ---
     const alertSound = new Audio('/sounds/alert.mp3');
-    // REMOVED: successSound to stop the annoying audio spam
 
-    // Internal Logic State
     let myIdealBack = 0;
     let myIdealNeck = 0;
     let calibrationBuffer = [];
@@ -32,7 +27,6 @@ export function usePostureEngine(videoRef, toast) {
     let slouchStartTime = null;
     let lastNotificationTime = 0;
 
-    // Timer Variables
     let uploadInterval = null;
     let activeTimer = null;
     let chunkActiveSecs = 0;
@@ -50,12 +44,17 @@ export function usePostureEngine(videoRef, toast) {
             if (!slouchStartTime) slouchStartTime = Date.now();
             const duration = (Date.now() - slouchStartTime) / 1000;
 
-            if (duration >= 30) {
+            if (duration >= 15) {
                 statusMessage.value = "CRITICAL: POSTURAL RESET REQUIRED";
-            } else if (duration >= 7) { // TWEAKED: Lowered from 15s to 7s so it actually triggers
+                if (Date.now() - lastNotificationTime > 8000) {
+                    alertSound.play().catch(() => console.log("Audio blocked"));
+                    sessionData.value.alerts++;
+                    lastNotificationTime = Date.now();
+                }
+            } else if (duration >= 7) {
                 statusMessage.value = "ALERT: SUSTAINED SLOUCH";
-                if (Date.now() - lastNotificationTime > 10000) { // Play every 10s while slouching
-                    alertSound.play().catch(() => { console.log("Audio blocked by browser") });
+                if (Date.now() - lastNotificationTime > 10000) {
+                    alertSound.play().catch(() => console.log("Audio blocked"));
                     sessionData.value.alerts++;
                     lastNotificationTime = Date.now();
                     toast.warning("Persistent deviation detected.");
@@ -67,7 +66,7 @@ export function usePostureEngine(videoRef, toast) {
             }
         } else {
             statusMessage.value = "Stable State";
-            slouchStartTime = null; // Clean reset, no annoying sounds!
+            slouchStartTime = null;
         }
     };
 
@@ -90,10 +89,8 @@ export function usePostureEngine(videoRef, toast) {
             alert_count: sessionData.value.alerts
         };
 
-        // Clear local array
         sessionData.value = { scores: [], slouchFrames: 0, totalFrames: 0, alerts: 0 };
 
-        // FIXED: Using Axios instead of Inertia prevents the 204 crash and UI hijacks
         axios.post('/posture-chunks', payload).catch(err => {
             console.error("Failed to sync chunk", err);
         });
@@ -137,7 +134,18 @@ export function usePostureEngine(videoRef, toast) {
             }
 
             if (isCalibrated.value) {
-                scoreHistory.value.push(res.data.score);
+                let rawScore = res.data.score;
+                const isLabeledSlouch = res.data.label === 1;
+
+                if (isLabeledSlouch && slouchStartTime) {
+                    const slouchDuration = (Date.now() - slouchStartTime) / 1000;
+                    const dynamicPenalty = Math.min(45, slouchDuration * 3);
+                    rawScore = Math.max(30, rawScore - dynamicPenalty);
+                } else if (isLabeledSlouch) {
+                    rawScore = Math.min(rawScore, 85);
+                }
+
+                scoreHistory.value.push(rawScore);
                 if (scoreHistory.value.length > 5) scoreHistory.value.shift();
 
                 const avg = scoreHistory.value.reduce((a, b) => a + b, 0) / scoreHistory.value.length;
@@ -147,7 +155,7 @@ export function usePostureEngine(videoRef, toast) {
                     currentScore.value = finalScore;
                 }
 
-                isSlouching.value = res.data.label === 1 || currentScore.value < 75;
+                isSlouching.value = isLabeledSlouch || currentScore.value < 75;
                 handleAdaptiveFeedback(isSlouching.value);
 
                 sessionData.value.scores.push(currentScore.value);
@@ -160,9 +168,17 @@ export function usePostureEngine(videoRef, toast) {
     };
 
     const triggerCalibration = () => {
+        alertSound.volume = 0.01;
+        alertSound.play().then(() => {
+            alertSound.pause();
+            alertSound.volume = 1;
+            alertSound.currentTime = 0;
+        }).catch(() => { });
+
         isLocking.value = true;
         calibrationCountdown.value = 5;
         calibrationBuffer = [];
+
         const timer = setInterval(() => {
             if (statusMessage.value !== "BAD POSTURE DETECTED") {
                 calibrationCountdown.value--;
@@ -180,8 +196,9 @@ export function usePostureEngine(videoRef, toast) {
             toast.error("Calibration failed. Please sit straight.");
             return;
         }
-        myIdealBack = calibrationBuffer.reduce((a, b) => a + b.back, 0) / calibrationBuffer.length;
-        myIdealNeck = calibrationBuffer.reduce((a, b) => a + b.neck, 0) / calibrationBuffer.length;
+
+        myIdealBack = calibrationBuffer.reduce((a, b) => a + (parseFloat(b.back) || 0), 0) / calibrationBuffer.length;
+        myIdealNeck = calibrationBuffer.reduce((a, b) => a + (parseFloat(b.neck) || 0), 0) / calibrationBuffer.length;
 
         isCalibrated.value = true;
         isLocking.value = false;
