@@ -46,12 +46,9 @@ Route::get('/terms-of-service', function () {
 |--------------------------------------------------------------------------
 | Semi-Protected Routes (Must be Logged In, but before Onboarding)
 |--------------------------------------------------------------------------
-| These routes do NOT have the CheckOnboarding middleware so users
-| aren't stuck in an infinite redirect loop when trying to fill the form.
 */
 
 Route::middleware(['auth', 'verified'])->group(function () {
-    // --- ONBOARDING ---
     Route::get('/onboarding', [OnboardingController::class, 'create'])->name('onboarding.create');
     Route::post('/onboarding', [OnboardingController::class, 'store'])->name('onboarding.store');
 });
@@ -60,8 +57,6 @@ Route::middleware(['auth', 'verified'])->group(function () {
 |--------------------------------------------------------------------------
 | Fully Protected Routes (Logged In + Verified + Onboarded)
 |--------------------------------------------------------------------------
-| The CheckOnboarding middleware guarantees that no one can access the 
-| dashboard or camera unless they have answered the medical/age questions.
 */
 
 Route::middleware(['auth', 'verified', CheckOnboarding::class])->group(function () {
@@ -76,8 +71,6 @@ Route::middleware(['auth', 'verified', CheckOnboarding::class])->group(function 
 
     // --- POSTURE DATA API ---
     Route::post('/posture-chunks', [PostureChunkController::class, 'store'])->name('posture-chunks.store');
-    
-    // [FIXED]: Differentiated the URI and name for destroying a whole session vs a single chunk
     Route::delete('/posture-chunks/{id}/session', [PostureChunkController::class, 'destroySession'])->name('posture-chunks.destroy-session');
     Route::delete('/posture-chunks/{id}', [PostureChunkController::class, 'destroy'])->name('posture-chunks.destroy');
 
@@ -86,7 +79,14 @@ Route::middleware(['auth', 'verified', CheckOnboarding::class])->group(function 
     Route::patch('/profile', [ProfileController::class, 'update'])->name('profile.update');
     Route::delete('/profile', [ProfileController::class, 'destroy'])->name('profile.destroy');
 
+    // --- FEEDBACK & ONBOARDING ---
     Route::post('/feedback', [FeedbackController::class, 'store'])->name('feedback.store');
+
+    // [FIXED]: forceFill completely bypasses the Mass Assignment 500 Error!
+    Route::post('/tour/complete', function (\Illuminate\Http\Request $request) {
+        $request->user()->forceFill(['has_seen_tour' => true])->save();
+        return response()->json(['status' => 'success']);
+    })->name('tour.complete');
 
     /*
     |----------------------------------------------------------------------
@@ -94,15 +94,11 @@ Route::middleware(['auth', 'verified', CheckOnboarding::class])->group(function 
     |----------------------------------------------------------------------
     */
     Route::prefix('admin')
-        ->name('admin.') // This ensures all child routes start with 'admin.'
+        ->name('admin.')
         ->middleware('can:access-admin')
         ->group(function () {
-            // dashboard -> mapped to admin.dashboard
             Route::get('/', [AdminController::class, 'index'])->name('dashboard');
-            
             Route::get('/users', [AdminController::class, 'users'])->name('users.index');
-            
-            // users/{user} -> mapped to admin.users.show
             Route::get('/users/{user}', [AdminController::class, 'show'])->name('users.show');
             Route::get('/users/{user}/edit', [AdminController::class, 'edit'])->name('users.edit');
             Route::patch('/users/{user}', [AdminController::class, 'update'])->name('users.update');

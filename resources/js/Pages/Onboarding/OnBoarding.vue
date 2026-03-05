@@ -34,7 +34,7 @@ const submit = () => {
                 <div class="h-14 w-14 rounded-2xl bg-indigo-600 flex items-center justify-center shadow-xl shadow-indigo-500/20 mb-5">
                     <ApplicationLogo class="h-8 w-auto fill-current text-white" />
                 </div>
-                <h1 class="text-3xl font-black text-white tracking-tight uppercase">
+                <h1 class="text-3xl font-black text-white tracking-tight uppercase text-center">
                     Welcome to <span class="text-indigo-500">ErgoVision</span>
                 </h1>
                 <p class="text-slate-400 mt-2 text-xs font-bold uppercase tracking-widest text-center">
@@ -49,21 +49,21 @@ const submit = () => {
                     <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
                         
                         <button type="button" @click="form.occupation = 'Student'" 
-                            class="group p-5 border rounded-3xl transition-all text-left"
+                            class="group p-5 border rounded-3xl transition-all text-center sm:text-left flex flex-col items-center sm:items-start"
                             :class="form.occupation === 'Student' ? 'bg-indigo-500/10 border-indigo-500 ring-1 ring-indigo-500/50' : 'bg-slate-950 border-white/5 hover:border-indigo-500/50'">
                             <h3 class="text-sm font-bold text-white uppercase tracking-tight">Student</h3>
                             <p class="text-slate-500 text-[10px] mt-1 leading-relaxed">Most of my time is spent studying.</p>
                         </button>
 
                         <button type="button" @click="form.occupation = 'Office Professional'" 
-                            class="group p-5 border rounded-3xl transition-all text-left"
+                            class="group p-5 border rounded-3xl transition-all text-center sm:text-left flex flex-col items-center sm:items-start"
                             :class="form.occupation === 'Office Professional' ? 'bg-indigo-500/10 border-indigo-500 ring-1 ring-indigo-500/50' : 'bg-slate-950 border-white/5 hover:border-indigo-500/50'">
                             <h3 class="text-sm font-bold text-white uppercase tracking-tight">Worker</h3>
                             <p class="text-slate-500 text-[10px] mt-1 leading-relaxed">I work at a desk most of the day.</p>
                         </button>
 
                         <button type="button" @click="form.occupation = 'Recreational User'" 
-                            class="group p-5 border rounded-3xl transition-all text-left"
+                            class="group p-5 border rounded-3xl transition-all text-center sm:text-left flex flex-col items-center sm:items-start"
                             :class="form.occupation === 'Recreational User' ? 'bg-indigo-500/10 border-indigo-500 ring-1 ring-indigo-500/50' : 'bg-slate-950 border-white/5 hover:border-indigo-500/50'">
                             <h3 class="text-sm font-bold text-white uppercase tracking-tight">Hobbyist</h3>
                             <p class="text-slate-500 text-[10px] mt-1 leading-relaxed">Gaming, browsing, or casual use.</p>
@@ -73,17 +73,17 @@ const submit = () => {
 
                 <div class="grid grid-cols-1 sm:grid-cols-12 gap-8 pt-6 border-t border-white/5">
                     
-                    <div class="sm:col-span-4 lg:col-span-3">
-                        <label class="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">Age</label>
+                    <div class="sm:col-span-4 lg:col-span-3 flex flex-col items-center sm:items-start">
+                        <label class="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 text-center sm:text-left">Age</label>
                         <input type="number" v-model="form.age" min="13" max="100" required
-                            class="w-full max-w-[120px] bg-slate-950 border border-white/10 rounded-xl px-4 py-3 text-white focus:ring-2 focus:ring-indigo-500 transition-all text-center tabular-nums" />
+                            class="w-full max-w-[120px] bg-slate-950 border border-white/10 rounded-xl px-4 py-3 text-white focus:ring-2 focus:ring-indigo-500 transition-all text-center tabular-nums mx-auto sm:mx-0" />
                     </div>
 
                     <div class="sm:col-span-8 lg:col-span-9">
-                        <div class="flex justify-between items-end mb-2">
-                            <label class="block text-[10px] font-black text-slate-400 uppercase tracking-widest">Daily Sitting</label>
+                        <div class="flex flex-col sm:flex-row justify-between items-center sm:items-end mb-4 sm:mb-2 gap-2 sm:gap-0">
+                            <label class="block text-[10px] font-black text-slate-400 uppercase tracking-widest text-center sm:text-left">Daily Sitting</label>
                             
-                            <span class="text-xl font-black text-indigo-400 tabular-nums leading-none">
+                            <span class="text-xl font-black text-indigo-400 tabular-nums leading-none text-center">
                                 <template v-if="form.daily_sitting_hours == 0">&lt; 1</template>
                                 <template v-else-if="form.daily_sitting_hours == 13">12+</template>
                                 <template v-else>{{ form.daily_sitting_hours }}</template>
@@ -117,14 +117,14 @@ const submit = () => {
                     </div>
 
                     <div v-if="form.has_musculoskeletal_issues === 'yes'" class="animate-fade-in-down pt-2">
-                        <label class="block text-[10px] font-black text-amber-400/70 uppercase tracking-widest mb-2">Please specify</label>
+                        <label class="block text-[10px] font-black text-amber-400/70 uppercase tracking-widest mb-2 text-center sm:text-left">Please specify</label>
                         <textarea v-model="form.musculoskeletal_details" rows="2" required
                             class="w-full bg-slate-950 border border-amber-500/20 rounded-xl px-4 py-3 text-white focus:ring-2 focus:ring-amber-500 transition-all resize-none"></textarea>
                     </div>
                 </div>
 
                 <div class="pt-6 border-t border-white/5">
-                    <label for="terms" class="flex items-start gap-3 cursor-pointer group">
+                    <label for="terms" class="flex items-start justify-center sm:justify-start gap-3 cursor-pointer group">
                         <input 
                             id="terms" 
                             type="checkbox" 

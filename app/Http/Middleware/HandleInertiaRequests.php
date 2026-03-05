@@ -46,6 +46,7 @@ class HandleInertiaRequests extends Middleware
                     'has_musculoskeletal_issues' => $request->user()->has_musculoskeletal_issues,
                     'musculoskeletal_details' => $request->user()->musculoskeletal_details,
                     'is_onboarded' => $request->user()->is_onboarded,
+                    'has_seen_tour' => (bool) $request->user()->has_seen_tour,
                 ] : null,
             ],
 

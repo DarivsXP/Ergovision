@@ -14,7 +14,6 @@ const props = defineProps({
 });
 
 const chartData = computed(() => ({
-    // FIX: Send the raw created_at string so the options callback can parse it properly
     labels: props.data.map(d => d.created_at), 
     datasets: [{
         label: 'Efficiency %',
@@ -23,7 +22,7 @@ const chartData = computed(() => ({
         backgroundColor: 'rgba(99, 102, 241, 0.1)',
         tension: 0.4,
         fill: true,
-        pointRadius: props.data.length > 50 ? 0 : 4, // Hide points if data is dense
+        pointRadius: props.data.length > 50 ? 0 : 4, 
         pointHoverRadius: 6
     }]
 }));
@@ -60,7 +59,7 @@ const options = {
             ticks: {
                 maxRotation: 0,
                 autoSkip: true,
-                maxTicksLimit: 8, // Keeps the chart from looking cluttered
+                maxTicksLimit: 8, 
                 callback: function(val, index) {
                     const rawLabel = this.getLabelForValue(val);
                     const date = new Date(rawLabel);

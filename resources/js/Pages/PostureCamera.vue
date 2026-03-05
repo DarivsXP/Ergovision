@@ -1,10 +1,12 @@
 <script setup>
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
 import { ref, onMounted, onUnmounted } from 'vue';
-import { router } from '@inertiajs/vue3'; // [NEW] Imported Inertia router
+import { router } from '@inertiajs/vue3';
 import { useToast } from '@/Composables/useToast';
 import { usePostureEngine } from '@/Composables/usePostureEngine';
-import SessionFeedbackModal from '@/Components/SessionFeedbackModal.vue'; // [NEW] Imported the modal
+import SessionFeedbackModal from '@/Components/SessionFeedbackModal.vue'; 
+import { driver } from "driver.js";
+import "driver.js/dist/driver.css";
 
 const videoRef = ref(null);
 const toast = useToast();
@@ -18,16 +20,7 @@ const {
 let pose = null;
 let camera = null;
 
-// [NEW] State for controlling the modal visibility
 const showFeedbackModal = ref(false);
-
-onMounted(() => {
-    if (window.Pose) {
-        pose = new window.Pose({ locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/pose/${file}` });
-        pose.setOptions({ modelComplexity: 1, smoothLandmarks: true, minDetectionConfidence: 0.5 });
-        pose.onResults(onResults);
-    }
-});
 
 const startCamera = async () => {
     try {
@@ -42,13 +35,10 @@ const startCamera = async () => {
 };
 
 const stopCamera = () => {
-    // 1. Clean up hardware and background processes
     if (camera) camera.stop();
     isCameraOn.value = false;
     cleanup();
 
-    // 2. The 1-Minute Rule
-    // (Pro tip: Change '60' to '5' if you want to test the modal quickly without waiting a full minute!)
     if (sessionDurationSecs.value >= 60) {
         showFeedbackModal.value = true;
     } else {
@@ -56,7 +46,6 @@ const stopCamera = () => {
     }
 };
 
-// [NEW] Handle the modal submission
 const handleFeedbackSubmission = (formData) => {
     formData.post(route('feedback.store'), {
         onSuccess: () => {
@@ -65,7 +54,6 @@ const handleFeedbackSubmission = (formData) => {
     });
 };
 
-// [NEW] Handle the skip button
 const skipFeedback = () => {
     showFeedbackModal.value = false;
     router.visit(route('dashboard'));
@@ -75,6 +63,86 @@ onUnmounted(() => {
     if (camera) camera.stop();
     cleanup();
 });
+
+// --- CAMERA TOUR LOGIC ---
+const cameraTour = driver({
+    showProgress: true,
+    animate: true,
+    overlayColor: 'rgba(2, 6, 23, 0.95)', // Darker overlay
+    allowClose: false,
+    nextBtnText: 'Next →',
+    prevBtnText: '← Back',
+    doneBtnText: 'Got It!',
+    steps: [
+        {
+            popover: {
+                title: 'Camera Positioning',
+                description: `
+                    <div class="mt-4 leading-relaxed">
+                        <p class="mb-3">For the AI to accurately map your spine, position your camera at a <strong class="text-indigo-400">45° to 90° angle</strong> (side-profile).</p>
+                        <p>Do not face the camera directly. Face your monitor normally, and let the camera view you from the side.</p>
+                    </div>
+                `,
+            }
+        },
+        {
+            popover: {
+                title: 'The 3 Critical Points',
+                description: `
+                    <div class="mt-4 text-sm">
+                        <p class="mb-3">The AI skeleton needs a clear line of sight to three body parts:</p>
+                        <ul class="list-disc pl-5 font-bold text-white mb-4 space-y-1">
+                            <li>Your Ear</li>
+                            <li>Your Shoulder</li>
+                            <li>Your Hip</li>
+                        </ul>
+                        <div class="p-3 bg-indigo-500/10 border border-indigo-500/20 rounded-xl text-xs text-indigo-300">
+                            <strong>Tip:</strong> Tuck away loose hair and avoid highly baggy clothing that hides your neck or hips.
+                        </div>
+                    </div>
+                `,
+            }
+        },
+        {
+            element: '#tour-step-engine',
+            popover: {
+                title: 'Start the Engine',
+                description: '<div class="mt-2 text-sm">Click <strong class="text-indigo-400">Initialize Engine</strong> to turn on your webcam and let the AI find your skeleton.</div>',
+                side: "top", align: 'center'
+            }
+        },
+        {
+            popover: {
+                title: 'Locking Your Baseline',
+                description: `
+                    <div class="mt-4 text-sm">
+                        <p class="mb-3">Once the camera is on, sit in your absolute best posture.</p>
+                        <p>Click <strong class="text-white">Start 5s Lock</strong> and hold perfectly still while the AI calculates your unique ergonomic baseline.</p>
+                    </div>
+                `,
+            }
+        }
+    ],
+    onDestroyed: () => {
+        localStorage.setItem('has_seen_camera_tour', 'true');
+    }
+});
+
+onMounted(() => {
+    if (!localStorage.getItem('has_seen_camera_tour')) {
+        setTimeout(() => cameraTour.drive(), 800); 
+    }
+    
+    if (window.Pose) {
+        pose = new window.Pose({ locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/pose/${file}` });
+        pose.setOptions({ modelComplexity: 1, smoothLandmarks: true, minDetectionConfidence: 0.5 });
+        pose.onResults(onResults);
+    }
+});
+
+const replayCameraTour = () => {
+    cameraTour.drive();
+};
 </script>
 
 <template>
@@ -84,12 +152,25 @@ onUnmounted(() => {
                 
                 <div class="w-full flex justify-between items-end mb-8">
                     <div>
-                        <h2 class="text-3xl font-black text-white tracking-tighter uppercase">ERGO<span class="text-indigo-500">VISION</span></h2>
+                        <div class="flex items-center gap-4 mb-1">
+                            <h2 class="text-3xl font-black text-white tracking-tighter uppercase">ERGO<span class="text-indigo-500">VISION</span></h2>
+                            
+                            <button @click="replayCameraTour" class="hidden sm:flex items-center text-[10px] font-black text-slate-500 hover:text-indigo-400 uppercase tracking-widest transition-colors">
+                                <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                                Replay Setup Guide
+                            </button>
+                        </div>
                         <p class="text-slate-400 text-[10px] uppercase font-bold tracking-widest">{{ isCalibrated ? 'ACTIVE' : 'READY' }}</p>
                     </div>
-                    <div v-if="isCameraOn" class="text-right tabular-nums">
-                        <p class="text-[10px] font-black text-indigo-400 uppercase mb-1">Active Duration</p>
-                        <p class="text-2xl font-mono font-bold text-white">{{ formattedDuration }}</p>
+                    
+                    <div class="flex flex-col items-end">
+                        <button @click="replayCameraTour" class="sm:hidden mb-2 text-[10px] font-black text-slate-500 uppercase tracking-widest">
+                            Setup Guide
+                        </button>
+                        <div v-if="isCameraOn" class="text-right tabular-nums">
+                            <p class="text-[10px] font-black text-indigo-400 uppercase mb-1">Active Duration</p>
+                            <p class="text-2xl font-mono font-bold text-white">{{ formattedDuration }}</p>
+                        </div>
                     </div>
                 </div>
 
@@ -140,7 +221,7 @@ onUnmounted(() => {
                 </div>
 
                 <div class="mt-10 w-full max-w-xl">
-                    <button v-if="!isCameraOn" @click="startCamera" class="w-full py-5 bg-indigo-600 hover:bg-indigo-500 text-white font-black rounded-[2rem] shadow-2xl uppercase tracking-widest">
+                    <button id="tour-step-engine" v-if="!isCameraOn" @click="startCamera" class="w-full py-5 bg-indigo-600 hover:bg-indigo-500 text-white font-black rounded-[2rem] shadow-2xl uppercase tracking-widest transition-all">
                         Initialize Engine
                     </button>
                     <div v-else class="flex gap-4">

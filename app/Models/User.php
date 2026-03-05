@@ -31,6 +31,7 @@ class User extends Authenticatable
                 'has_musculoskeletal_issues',
                 'musculoskeletal_details',
                 'is_onboarded',
+                'has_seen_tour',
             ];
 
     /**
