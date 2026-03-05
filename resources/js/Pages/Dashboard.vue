@@ -215,13 +215,29 @@ const startTour = () => {
                         <div class="relative">
                             <button @click.stop="showExportMenu = !showExportMenu" 
                                 class="flex items-center gap-2 px-5 py-3 bg-indigo-600 hover:bg-indigo-500 rounded-2xl text-[10px] font-black text-white uppercase tracking-widest transition-all shadow-[0_0_20px_rgba(79,70,229,0.3)] group">
-                                <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 group-hover:animate-bounce" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a2 2 0 002 2h12a2 2 0 002-2v-1m-4-4l-4 4m0 0l-4-4m4 4V4" /></svg>
+                                <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 group-hover:animate-bounce" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a2 2 0 002 2h12a2 2 0 002-2v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                                </svg>
                                 Export Report
                             </button>
 
-                            <transition enter-active-class="transition ease-out duration-200" enter-from-class="opacity-0 scale-95 translate-y-2" enter-to-class="opacity-100 scale-100 translate-y-0" leave-active-class="transition ease-in duration-150" leave-from-class="opacity-100 scale-100 translate-y-0" leave-to-class="opacity-0 scale-95 translate-y-2">
+                            <transition 
+                                enter-active-class="transition ease-out duration-200" 
+                                enter-from-class="opacity-0 scale-95 translate-y-2" 
+                                enter-to-class="opacity-100 scale-100 translate-y-0" 
+                                leave-active-class="transition ease-in duration-150" 
+                                leave-from-class="opacity-100 scale-100 translate-y-0" 
+                                leave-to-class="opacity-0 scale-95 translate-y-2"
+                            >
                                 <div v-if="showExportMenu" class="absolute top-full right-0 mt-2 w-48 bg-slate-800 border border-white/10 rounded-xl shadow-2xl overflow-hidden z-50">
-                                    </div>
+                                    <button @click="exportToCSV" class="w-full px-4 py-3 text-left text-[10px] font-black text-slate-300 hover:bg-indigo-600 hover:text-white uppercase tracking-widest transition-colors border-b border-white/5">
+                                        Download CSV
+                                    </button>
+                                    
+                                    <button @click="exportToPDF" class="w-full px-4 py-3 text-left text-[10px] font-black text-slate-300 hover:bg-indigo-600 hover:text-white uppercase tracking-widest transition-colors">
+                                        Download PDF
+                                    </button>
+                                </div>
                             </transition>
                         </div>
 

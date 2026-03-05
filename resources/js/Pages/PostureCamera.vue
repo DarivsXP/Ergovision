@@ -24,14 +24,20 @@ const showFeedbackModal = ref(false);
 
 const startCamera = async () => {
     try {
+        const isMobile = window.innerWidth < 768;
+        
         camera = new window.Camera(videoRef.value, {
             onFrame: async () => { if (pose) await pose.send({ image: videoRef.value }); },
-            width: 640, height: 480
+            width: isMobile ? 480 : 640,
+            height: isMobile ? 640 : 480
         });
+        
         camera.start();
         isCameraOn.value = true;
         sessionDurationSecs.value = 0;
-    } catch (e) { toast.error("Camera Access Denied"); }
+    } catch (e) { 
+        toast.error("Camera Access Denied"); 
+    }
 };
 
 const stopCamera = () => {
@@ -64,11 +70,11 @@ onUnmounted(() => {
     cleanup();
 });
 
-// --- CAMERA TOUR LOGIC ---
+// CAMERA TOUR LOGIC
 const cameraTour = driver({
     showProgress: true,
     animate: true,
-    overlayColor: 'rgba(2, 6, 23, 0.95)', // Darker overlay
+    overlayColor: 'rgba(2, 6, 23, 0.95)',
     allowClose: false,
     nextBtnText: 'Next →',
     prevBtnText: '← Back',
@@ -174,7 +180,7 @@ const replayCameraTour = () => {
                     </div>
                 </div>
 
-                <div class="relative w-full aspect-video bg-black rounded-[3rem] overflow-hidden shadow-2xl border border-white/5 transition-all duration-500"
+                <div class="relative w-full aspect-[3/4] md:aspect-video bg-black rounded-[3rem] overflow-hidden shadow-2xl border border-white/5 transition-all duration-500"
                      :class="{
                         'ring-4 ring-emerald-500/50': statusMessage === 'Stable State',
                         'ring-4 ring-amber-500/50 animate-pulse': statusMessage === 'WARNING: DRIFT DETECTED',
