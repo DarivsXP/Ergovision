@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\User;
 use App\Models\PostureChunk;
+use App\Models\SessionFeedback;
 use Inertia\Inertia;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Http\Request;
@@ -85,8 +86,67 @@ class AdminController extends Controller
                 'avg_score' => round($chunksQuery->avg('score') ?? 0, 1),
                 'total_slouch_time' => (int) $chunksQuery->sum('slouch_duration'),
                 'total_sessions' => $chunksQuery->count(),
-            ]
+            ],
+            'feedback' => SessionFeedback::where('user_id', $user->id)
+                ->latest()
+                ->paginate(10),
         ]);
+    }
+
+    /**
+     * Export all posture telemetry as CSV for research / thesis.
+     */
+    public function exportTelemetry()
+    {
+        if (!Gate::allows('access-admin')) {
+            abort(403);
+        }
+
+        $fileName = 'ergovision_telemetry_' . now()->format('Ymd_His') . '.csv';
+
+        $headers = [
+            'Content-Type' => 'text/csv',
+            'Content-Disposition' => "attachment; filename=\"{$fileName}\"",
+        ];
+
+        $callback = function () {
+            $handle = fopen('php://output', 'w');
+
+            // CSV Header
+            fputcsv($handle, [
+                'user_id',
+                'user_name',
+                'user_email',
+                'chunk_id',
+                'score',
+                'slouch_duration_seconds',
+                'duration_seconds',
+                'alert_count',
+                'created_at',
+            ]);
+
+            PostureChunk::with('user')
+                ->orderBy('created_at', 'asc')
+                ->chunk(500, function ($chunks) use ($handle) {
+                    foreach ($chunks as $chunk) {
+                        fputcsv($handle, [
+                            $chunk->user_id,
+                            optional($chunk->user)->name,
+                            optional($chunk->user)->email,
+                            $chunk->id,
+                            $chunk->score,
+                            $chunk->slouch_duration,
+                            $chunk->duration_seconds,
+                            $chunk->alert_count,
+                            $chunk->created_at,
+                        ]);
+                    }
+                });
+
+            fclose($handle);
+        };
+
+        return response()->stream($callback, 200, $headers);
     }
 
     /**

@@ -19,8 +19,16 @@ const props = defineProps({
                 <h2 class="font-black text-2xl text-white tracking-tighter uppercase">
                     Admin <span class="text-indigo-500">Console</span>
                 </h2>
-                <div class="px-3 py-1 bg-indigo-500/20 border border-indigo-500/50 rounded-full">
-                    <span class="text-indigo-400 text-xs font-mono font-bold">Secure Access Verified</span>
+                <div class="flex items-center gap-3">
+                    <a
+                        :href="route('admin.export.telemetry')"
+                        class="px-4 py-2 rounded-full bg-indigo-600 hover:bg-indigo-500 text-white text-[10px] font-black uppercase tracking-[0.2em] shadow-lg shadow-indigo-500/30 border border-indigo-400/40"
+                    >
+                        Export Telemetry CSV
+                    </a>
+                    <div class="px-3 py-1 bg-indigo-500/20 border border-indigo-500/50 rounded-full">
+                        <span class="text-indigo-400 text-xs font-mono font-bold">Secure Access Verified</span>
+                    </div>
                 </div>
             </div>
         </template>
@@ -35,19 +43,19 @@ const props = defineProps({
                     </div>
 
                     <div class="bg-slate-900 border border-indigo-500/30 p-6 rounded-3xl shadow-[0_0_30px_rgba(79,70,229,0.1)]">
-                        <p class="text-indigo-400 text-[10px] font-black uppercase tracking-[0.2em]">Active Pulse (24h)</p>
+                        <p class="text-indigo-400 text-[10px] font-black uppercase tracking-[0.2em]">Sessions (Last 24h)</p>
                         <h3 class="text-4xl font-black text-white mt-2">{{ stats.active_sessions }}</h3>
                     </div>
 
                     <div class="bg-slate-900 border border-emerald-500/30 p-6 rounded-3xl shadow-[0_0_30px_rgba(16,185,129,0.1)]">
-                        <p class="text-emerald-400 text-[10px] font-black uppercase tracking-[0.2em]">Platform Health</p>
+                        <p class="text-emerald-400 text-[10px] font-black uppercase tracking-[0.2em]">Global Average Score</p>
                         <h3 class="text-4xl font-black text-white mt-2">{{ stats.avg_score }}<span class="text-lg">%</span></h3>
                     </div>
                 </div>
 
                 <div class="bg-slate-900 border border-slate-800 rounded-[2rem] overflow-hidden shadow-2xl">
                     <div class="p-6 border-b border-slate-800 flex justify-between items-center">
-                        <h4 class="text-white font-bold tracking-tight">Recent Deployments (Users)</h4>
+                        <h4 class="text-white font-bold tracking-tight">Recent Users</h4>
                         
                         <Link :href="route('admin.users.index')" class="text-xs text-indigo-400 hover:text-white transition font-bold uppercase tracking-wider">
                             View Full Roster &rarr;
@@ -58,9 +66,9 @@ const props = defineProps({
                         <table class="w-full text-left">
                             <thead class="bg-slate-950/50">
                                 <tr class="text-slate-500 text-[10px] uppercase font-bold tracking-widest">
-                                    <th class="p-5">Operator</th>
-                                    <th class="p-5">Identification</th>
-                                    <th class="p-5">Joined</th>
+                                    <th class="p-5">Name</th>
+                                    <th class="p-5">Email</th>
+                                    <th class="p-5">Registered</th>
                                     <th class="p-5 text-right">Actions</th>
                                 </tr>
                             </thead>

@@ -80,6 +80,11 @@ const dashboardRoute = computed(() => {
                                           :class="route().current('camera') ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-500/20' : 'text-slate-500 hover:text-white'">
                                         Monitor
                                     </Link>
+                                    <Link :href="route('feedback.history')" 
+                                          class="px-5 py-2 rounded-full text-xs font-black uppercase tracking-widest transition-all"
+                                          :class="route().current('feedback.history') ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-500/20' : 'text-slate-500 hover:text-white'">
+                                        Feedback
+                                    </Link>
                                 </template>
                             </div>
                         </div>
@@ -136,6 +141,11 @@ const dashboardRoute = computed(() => {
                     </Link>
                     <Link v-if="!userIsAdmin" :href="route('camera')" class="p-2" :class="route().current('camera') ? 'text-indigo-500' : 'text-slate-500'">
                         <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" /></svg>
+                    </Link>
+                    <Link v-if="!userIsAdmin" :href="route('feedback.history')" class="p-2" :class="route().current('feedback.history') ? 'text-indigo-500' : 'text-slate-500'">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                        </svg>
                     </Link>
                     <Link :href="route('profile.edit')" class="p-2" :class="route().current('profile.edit') ? 'text-indigo-500' : 'text-slate-500'">
                         <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" /></svg>

@@ -4,9 +4,28 @@ namespace App\Http\Controllers;
 
 use App\Models\SessionFeedback;
 use Illuminate\Http\Request;
+use Inertia\Inertia;
 
 class FeedbackController extends Controller
 {
+    public function index(Request $request)
+    {
+        $feedback = SessionFeedback::query()
+            ->where('user_id', $request->user()->id)
+            ->latest()
+            ->get([
+                'id',
+                'fatigue_level',
+                'accuracy_rating',
+                'comments',
+                'created_at',
+            ]);
+
+        return Inertia::render('Feedback/History', [
+            'feedback' => $feedback,
+        ]);
+    }
+
     public function store(Request $request)
     {
         $validated = $request->validate([

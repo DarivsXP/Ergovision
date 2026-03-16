@@ -41,9 +41,17 @@ const deleteUser = (user) => {
                     User <span class="text-indigo-500">Management</span>
                 </h2>
                 
-                <Link :href="route('register')" class="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg text-xs font-bold uppercase tracking-widest transition shadow-lg shadow-indigo-500/20">
-                    + Add New User
-                </Link>
+                <div class="flex items-center gap-3">
+                    <a
+                        :href="route('admin.export.telemetry')"
+                        class="px-4 py-2 rounded-full bg-slate-800 hover:bg-slate-700 text-indigo-300 text-[10px] font-black uppercase tracking-[0.2em] border border-indigo-500/40"
+                    >
+                        Export Telemetry CSV
+                    </a>
+                    <Link :href="route('register')" class="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg text-xs font-bold uppercase tracking-widest transition shadow-lg shadow-indigo-500/20">
+                        + Add New User
+                    </Link>
+                </div>
             </div>
         </template>
 
@@ -117,14 +125,27 @@ const deleteUser = (user) => {
                     </div>
 
                     <div class="p-4 border-t border-slate-800 flex justify-center">
-                        <div class="flex gap-2">
-                            <Link v-for="link in users.links" 
-                                  :key="link.label"
-                                  :href="link.url ?? '#'" 
-                                  v-html="link.label"
-                                  class="px-3 py-1 rounded-md text-xs font-bold transition"
-                                  :class="link.active ? 'bg-indigo-600 text-white' : 'text-slate-500 hover:bg-slate-800'"
-                            />
+                        <div class="flex flex-col md:flex-row items-center justify-between gap-4 w-full max-w-xl text-[10px] font-black uppercase tracking-[0.25em] text-slate-500">
+                            <div class="tabular-nums">
+                                Showing 
+                                <span class="text-indigo-400">{{ users.from }}</span>
+                                -
+                                <span class="text-indigo-400">{{ users.to }}</span>
+                                of
+                                <span class="text-indigo-400">{{ users.total }}</span>
+                                users
+                            </div>
+
+                            <div class="flex items-center gap-2">
+                                <Link
+                                    v-for="link in users.links"
+                                    :key="link.label"
+                                    :href="link.url ?? '#'"
+                                    v-html="link.label"
+                                    class="px-3 py-1 rounded-md text-xs font-bold transition"
+                                    :class="link.active ? 'bg-indigo-600 text-white' : 'text-slate-500 hover:bg-slate-800'"
+                                />
+                            </div>
                         </div>
                     </div>
 

@@ -14,7 +14,11 @@ defineOptions({ name: 'UserDashboard' });
 const props = defineProps({
     summaryStats: Object,
     postureChunks: Array,
-    filters: Object
+    filters: Object,
+    feedbackForDashboard: {
+        type: Array,
+        default: () => [],
+    },
 });
 
 const user = usePage().props.auth.user;
@@ -23,8 +27,12 @@ const user = usePage().props.auth.user;
 const activePeriod = ref(props.filters?.period || (props.filters?.date ? null : '7d'));
 const selectedDate = ref(props.filters?.date || new Date().toISOString().split('T')[0]);
 const dateInput = ref(null);
-const showAllLogs = ref(false);
 const showExportMenu = ref(false);
+const currentPage = ref(1);
+const perPage = ref(10);
+const showSessionDetail = ref(false);
+const selectedSession = ref(null);
+const selectedSessionFeedback = ref(null);
 
 // --- Formatters ---
 const formatPH = (dateString, type = 'full') => {
@@ -96,10 +104,54 @@ const handleDateChange = (date) => {
 
 const openCalendar = () => { if (dateInput.value) dateInput.value.showPicker(); };
 
+const totalPages = computed(() => {
+    if (!props.postureChunks || props.postureChunks.length === 0) return 1;
+    return Math.max(1, Math.ceil(props.postureChunks.length / perPage.value));
+});
+
 const tableChunks = computed(() => {
     const reversed = [...props.postureChunks].reverse();
-    return showAllLogs.value ? reversed : reversed.slice(0, 5);
+    const start = (currentPage.value - 1) * perPage.value;
+    return reversed.slice(start, start + perPage.value);
 });
+
+const goToPage = (page) => {
+    if (page < 1 || page > totalPages.value) return;
+    currentPage.value = page;
+};
+
+const findFeedbackForSession = (chunk) => {
+    if (!chunk || !props.feedbackForDashboard || props.feedbackForDashboard.length === 0) return null;
+
+    const chunkTime = new Date(chunk.created_at).getTime();
+    const THRESHOLD_MS = 30 * 60 * 1000; // 30 minutes
+
+    let best = null;
+    let bestDiff = Infinity;
+
+    for (const fb of props.feedbackForDashboard) {
+        const fbTime = new Date(fb.created_at).getTime();
+        const diff = Math.abs(fbTime - chunkTime);
+        if (diff < bestDiff && diff <= THRESHOLD_MS) {
+            bestDiff = diff;
+            best = fb;
+        }
+    }
+
+    return best;
+};
+
+const openSessionDetail = (chunk) => {
+    selectedSession.value = chunk;
+    selectedSessionFeedback.value = findFeedbackForSession(chunk);
+    showSessionDetail.value = true;
+};
+
+const closeSessionDetail = () => {
+    showSessionDetail.value = false;
+    selectedSession.value = null;
+    selectedSessionFeedback.value = null;
+};
 
 const handleDelete = (id) => {
     if (confirm('Permanently remove this session? This will recalculate your averages.')) {
@@ -265,12 +317,31 @@ const startTour = () => {
                     <div class="bg-slate-900 border border-white/5 p-8 rounded-[2.5rem] shadow-xl flex flex-col justify-between min-h-[220px]">
                         <div>
                             <div class="flex justify-between items-start mb-2">
-                                <p class="text-[10px] font-black text-indigo-400 uppercase tracking-widest">Efficiency</p>
+                                <p class="text-[10px] font-black text-indigo-400 uppercase tracking-widest">Average Score</p>
                                 <span :class="['text-[9px] font-black uppercase tracking-tighter px-2 py-0.5 rounded-md bg-white/5', progressInsight.color]">
                                     {{ progressInsight.status }}
                                 </span>
                             </div>
                             <p class="text-5xl font-black text-white tracking-tighter">{{ summaryStats.averageScore }}%</p>
+                            
+                            <div v-if="summaryStats.trend" class="mt-4 flex flex-wrap items-center gap-2 text-[10px] font-black uppercase tracking-[0.2em]">
+                                <span class="px-3 py-1 rounded-full bg-slate-800 text-slate-300">
+                                    3d: <span class="text-white tabular-nums">{{ summaryStats.trend.last3 ?? '—' }}</span>%
+                                </span>
+                                <span class="px-3 py-1 rounded-full bg-slate-800 text-slate-300">
+                                    7d: <span class="text-white tabular-nums">{{ summaryStats.trend.last7 ?? '—' }}</span>%
+                                </span>
+                                <span class="px-3 py-1 rounded-full bg-slate-800 text-slate-300">
+                                    30d: <span class="text-white tabular-nums">{{ summaryStats.trend.last30 ?? '—' }}</span>%
+                                </span>
+                                <span
+                                    v-if="summaryStats.trend.delta3vs7 !== null"
+                                    class="px-3 py-1 rounded-full border text-[9px] tabular-nums"
+                                    :class="summaryStats.trend.delta3vs7 > 0 ? 'border-emerald-500/40 text-emerald-400 bg-emerald-500/5' : (summaryStats.trend.delta3vs7 < 0 ? 'border-rose-500/40 text-rose-400 bg-rose-500/5' : 'border-slate-600 text-slate-300 bg-slate-800')"
+                                >
+                                    {{ summaryStats.trend.delta3vs7 > 0 ? '+' : '' }}{{ summaryStats.trend.delta3vs7 }} pts vs 7d
+                                </span>
+                            </div>
                         </div>
                     </div>
                     <div class="bg-slate-900 border border-white/5 p-8 rounded-[2.5rem] shadow-xl flex flex-col justify-center">
@@ -307,6 +378,9 @@ const startTour = () => {
                     <div class="px-6 md:px-10 py-8 border-b border-white/5 flex items-center gap-3">
                         <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-indigo-500" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
                         <h3 class="text-sm font-black text-white uppercase tracking-widest">History</h3>
+                        <span class="ml-auto text-[10px] font-black uppercase tracking-[0.3em] text-slate-500 tabular-nums">
+                            Page {{ currentPage }} of {{ totalPages }}
+                        </span>
                     </div>
                     
                     <div class="w-full overflow-x-auto">
@@ -316,11 +390,17 @@ const startTour = () => {
                                     <th class="px-4 py-4 md:px-10 md:py-6 text-indigo-400">Timestamp</th>
                                     <th class="px-4 py-4 md:px-10 md:py-6 text-center">Score</th>
                                     <th class="px-4 py-4 md:px-10 md:py-6 text-center">Alerts</th>
+                                    <th class="px-4 py-4 md:px-10 md:py-6 text-center">Feedback</th>
                                     <th class="px-4 py-4 md:px-10 md:py-6 text-right pr-6 md:pr-12">Action</th>
                                 </tr>
                             </thead>
                             <tbody class="divide-y divide-white/5">
-                                <tr v-for="chunk in tableChunks" :key="chunk.id" class="hover:bg-white/[0.01] transition-colors">
+                                <tr
+                                    v-for="chunk in tableChunks"
+                                    :key="chunk.id"
+                                    class="hover:bg-white/[0.03] transition-colors cursor-pointer"
+                                    @click="openSessionDetail(chunk)"
+                                >
                                     <td class="px-4 py-4 md:px-10 md:py-6 font-mono text-xs text-slate-400">
                                         <span v-if="activePeriod" class="text-[10px] text-indigo-400/50 mr-2">{{ formatPH(chunk.created_at, 'short') }}</span>
                                         {{ formatPH(chunk.created_at, 'time') }}
@@ -332,7 +412,26 @@ const startTour = () => {
                                         </span>
                                     </td>
                                     <td class="px-4 py-4 md:px-10 md:py-6 text-center text-slate-400 font-bold text-sm">{{ chunk.alert_count }}</td>
-                                    <td class="px-4 py-4 md:px-10 md:py-6 text-right pr-6 md:pr-12 flex items-center justify-end gap-2 md:gap-4">
+                                    <td class="px-4 py-4 md:px-10 md:py-6 text-center">
+                                        <div
+                                            v-if="findFeedbackForSession(chunk)"
+                                            class="inline-flex items-center gap-1 px-3 py-1 rounded-full text-[9px] font-black uppercase tracking-[0.25em] border border-emerald-500/40 bg-emerald-500/10 text-emerald-300"
+                                            :title="findFeedbackForSession(chunk)?.comments || 'Feedback logged for this session'"
+                                        >
+                                            <span class="h-1.5 w-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
+                                            Logged
+                                        </div>
+                                        <span
+                                            v-else
+                                            class="inline-flex items-center gap-1 px-3 py-1 rounded-full text-[9px] font-black uppercase tracking-[0.25em] border border-slate-700 bg-slate-900 text-slate-500"
+                                        >
+                                            None
+                                        </span>
+                                    </td>
+                                    <td
+                                        class="px-4 py-4 md:px-10 md:py-6 text-right pr-6 md:pr-12 flex items-center justify-end gap-2 md:gap-4"
+                                        @click.stop
+                                    >
                                         <span class="text-slate-600 font-black text-[10px] uppercase hidden sm:inline">Telemetry_Verified</span>
                                         <button @click="handleDelete(chunk.id)" class="text-slate-500 hover:text-rose-500 p-1" title="Delete Session">
                                             <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
@@ -342,15 +441,148 @@ const startTour = () => {
                             </tbody>
                         </table>
                     </div>
-                    
-                    <div v-if="postureChunks.length > 5" class="p-6 bg-white/[0.01] border-t border-white/5 flex justify-center">
-                        <button @click="showAllLogs = !showAllLogs" class="text-[10px] font-black text-indigo-400 hover:text-white uppercase tracking-[0.3em]">
-                            {{ showAllLogs ? 'Hide Entries' : 'View Full History' }}
+
+                    <div v-if="postureChunks.length > perPage" class="px-6 md:px-10 py-4 bg-white/[0.01] border-t border-white/5 flex items-center justify-between gap-4">
+                        <button
+                            type="button"
+                            @click="goToPage(currentPage - 1)"
+                            :disabled="currentPage === 1"
+                            class="px-4 py-2 rounded-xl border border-white/10 text-[10px] font-black uppercase tracking-[0.25em] text-slate-300 disabled:opacity-40 disabled:cursor-not-allowed hover:bg-white/5 transition-colors"
+                        >
+                            Prev
+                        </button>
+
+                        <div class="flex items-center gap-2 text-[10px] font-black text-slate-400 uppercase tracking-[0.25em]">
+                            <span>Showing</span>
+                            <span class="text-indigo-400 tabular-nums">
+                                {{ (currentPage - 1) * perPage + 1 }}
+                                -
+                                {{ Math.min(currentPage * perPage, postureChunks.length) }}
+                            </span>
+                            <span>of</span>
+                            <span class="tabular-nums">{{ postureChunks.length }}</span>
+                            <span>sessions</span>
+                        </div>
+
+                        <button
+                            type="button"
+                            @click="goToPage(currentPage + 1)"
+                            :disabled="currentPage === totalPages"
+                            class="px-4 py-2 rounded-xl border border-white/10 text-[10px] font-black uppercase tracking-[0.25em] text-slate-300 disabled:opacity-40 disabled:cursor-not-allowed hover:bg-white/5 transition-colors"
+                        >
+                            Next
                         </button>
                     </div>
                 </div>
 
             </div>
         </div>
+        
+        <!-- Session Detail Slide-Over -->
+        <transition
+            enter-active-class="transition ease-out duration-300"
+            enter-from-class="opacity-0 translate-x-full"
+            enter-to-class="opacity-100 translate-x-0"
+            leave-active-class="transition ease-in duration-200"
+            leave-from-class="opacity-100 translate-x-0"
+            leave-to-class="opacity-0 translate-x-full"
+        >
+            <div
+                v-if="showSessionDetail && selectedSession"
+                class="fixed inset-0 z-50 flex justify-end bg-black/40 backdrop-blur-sm"
+                @click.self="closeSessionDetail"
+            >
+                <div class="w-full max-w-md h-full bg-slate-950 border-l border-white/10 shadow-2xl flex flex-col">
+                    <div class="px-6 py-5 border-b border-white/10 flex items-center justify-between">
+                        <div>
+                            <p class="text-[10px] font-black uppercase tracking-[0.3em] text-indigo-400">Session Detail</p>
+                            <p class="text-xs text-slate-400 mt-1">
+                                {{ formatPH(selectedSession.created_at, 'full') }}
+                            </p>
+                        </div>
+                        <button
+                            type="button"
+                            @click="closeSessionDetail"
+                            class="p-2 rounded-full hover:bg-white/5 text-slate-400 hover:text-white transition-colors"
+                        >
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+                            </svg>
+                        </button>
+                    </div>
+
+                    <div class="flex-1 overflow-y-auto px-6 py-6 space-y-6">
+                        <div class="bg-slate-900 rounded-2xl border border-white/10 p-4 flex items-center justify-between">
+                            <div>
+                                <p class="text-[10px] font-black uppercase tracking-[0.25em] text-slate-500">Score</p>
+                                <p class="text-3xl font-black text-white tracking-tight">{{ selectedSession.score }}%</p>
+                            </div>
+                            <div>
+                                <p class="text-[10px] font-black uppercase tracking-[0.25em] text-slate-500 text-right">Alerts</p>
+                                <p class="text-2xl font-black text-rose-400 tracking-tight text-right">{{ selectedSession.alert_count }}</p>
+                            </div>
+                        </div>
+
+                        <div class="bg-slate-900 rounded-2xl border border-white/10 p-4 grid grid-cols-2 gap-4">
+                            <div>
+                                <p class="text-[10px] font-black uppercase tracking-[0.25em] text-amber-400 mb-1">Slouch Time</p>
+                                <p class="text-xl font-black text-white tracking-tight">
+                                    {{ Math.floor((selectedSession.slouch_duration || 0) / 60) }}m
+                                </p>
+                            </div>
+                            <div>
+                                <p class="text-[10px] font-black uppercase tracking-[0.25em] text-emerald-400 mb-1">Active Duration</p>
+                                <p class="text-xl font-black text-white tracking-tight">
+                                    {{ Math.floor((selectedSession.duration_seconds || 0) / 60) }}m
+                                </p>
+                            </div>
+                        </div>
+
+                        <div class="bg-slate-900 rounded-2xl border border-white/10 p-4">
+                            <p class="text-[10px] font-black uppercase tracking-[0.25em] text-slate-500 mb-3">Subjective Feedback</p>
+
+                            <div v-if="selectedSessionFeedback">
+                                <div class="flex items-center justify-between mb-3">
+                                    <div>
+                                        <p class="text-[10px] font-black uppercase tracking-[0.25em] text-slate-500">Fatigue</p>
+                                        <p class="text-lg font-black text-white">
+                                            {{ selectedSessionFeedback.fatigue_level }} / 5
+                                        </p>
+                                    </div>
+                                    <div class="text-right">
+                                        <p class="text-[10px] font-black uppercase tracking-[0.25em] text-slate-500">Alert Accuracy</p>
+                                        <p class="text-lg font-black text-white">
+                                            {{ selectedSessionFeedback.accuracy_rating }} / 5
+                                        </p>
+                                    </div>
+                                </div>
+
+                                <p
+                                    v-if="selectedSessionFeedback.comments"
+                                    class="mt-2 text-[11px] text-slate-300 leading-relaxed whitespace-pre-line"
+                                >
+                                    {{ selectedSessionFeedback.comments }}
+                                </p>
+                                <p
+                                    v-else
+                                    class="mt-2 text-[11px] text-slate-500"
+                                >
+                                    No written comments for this session.
+                                </p>
+                            </div>
+
+                            <div v-else class="text-[11px] text-slate-500">
+                                No subjective feedback is linked to this session yet.
+                            </div>
+                        </div>
+
+                        <div class="bg-slate-900 rounded-2xl border border-dashed border-slate-700 p-4 text-[11px] text-slate-500">
+                            This panel summarizes the session using your telemetry:
+                            average score, alerts triggered, estimated slouch time, and any feedback you logged right after the session.
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </transition>
     </AuthenticatedLayout>
 </template>

@@ -81,6 +81,7 @@ Route::middleware(['auth', 'verified', CheckOnboarding::class])->group(function 
 
     // --- FEEDBACK & ONBOARDING ---
     Route::post('/feedback', [FeedbackController::class, 'store'])->name('feedback.store');
+    Route::get('/feedback/history', [FeedbackController::class, 'index'])->name('feedback.history');
 
     // [FIXED]: forceFill completely bypasses the Mass Assignment 500 Error!
     Route::post('/tour/complete', function (\Illuminate\Http\Request $request) {
@@ -103,6 +104,7 @@ Route::middleware(['auth', 'verified', CheckOnboarding::class])->group(function 
             Route::get('/users/{user}/edit', [AdminController::class, 'edit'])->name('users.edit');
             Route::patch('/users/{user}', [AdminController::class, 'update'])->name('users.update');
             Route::delete('/users/{user}', [AdminController::class, 'destroy'])->name('users.destroy');
+            Route::get('/export/telemetry', [AdminController::class, 'exportTelemetry'])->name('export.telemetry');
         });
 });
 
