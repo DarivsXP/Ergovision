@@ -38,7 +38,7 @@ class AdminController extends Controller
 
     /**
      * ---------------------------------------------------------
-     * NEW METHOD: Display the full list of users with SEARCH.
+     * Display the full list of users with SEARCH.
      * ---------------------------------------------------------
      */
     public function users(Request $request)
@@ -112,11 +112,15 @@ class AdminController extends Controller
         $callback = function () {
             $handle = fopen('php://output', 'w');
 
-            // CSV Header
             fputcsv($handle, [
                 'user_id',
                 'user_name',
                 'user_email',
+                'occupation',         
+                'age',                
+                'daily_sitting_hours',  
+                'pre_existing_pain',   
+                'pain_details',         
                 'chunk_id',
                 'score',
                 'slouch_duration_seconds',
@@ -129,10 +133,17 @@ class AdminController extends Controller
                 ->orderBy('created_at', 'asc')
                 ->chunk(500, function ($chunks) use ($handle) {
                     foreach ($chunks as $chunk) {
+                        $user = $chunk->user; 
+
                         fputcsv($handle, [
                             $chunk->user_id,
-                            optional($chunk->user)->name,
-                            optional($chunk->user)->email,
+                            optional($user)->name,
+                            optional($user)->email,
+                            optional($user)->occupation ?? 'N/A',
+                            optional($user)->age ?? 'N/A',
+                            optional($user)->daily_sitting_hours ?? 'N/A',
+                            optional($user)->has_musculoskeletal_issues ? 'Yes' : 'No',
+                            optional($user)->musculoskeletal_details ?? 'N/A',
                             $chunk->id,
                             $chunk->score,
                             $chunk->slouch_duration,
