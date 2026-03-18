@@ -24,6 +24,15 @@ let camera = null;
 const showFeedbackModal = ref(false);
 
 const startCamera = async () => {
+    if (!navigator.mediaDevices?.getUserMedia) {
+        const isSecure = window.location.protocol === 'https:' || window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+        toast.error(
+            isSecure
+                ? "Your browser doesn't support camera access. Try Chrome, Edge, or Firefox."
+                : "Camera requires HTTPS. Please use a secure URL (https://) or localhost."
+        );
+        return;
+    }
     try {
         const isMobile = window.innerWidth < 768;
         
