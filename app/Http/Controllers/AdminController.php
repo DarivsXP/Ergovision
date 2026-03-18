@@ -161,6 +161,71 @@ class AdminController extends Controller
     }
 
     /**
+     * Export feedback sessions only as CSV for analysis.
+     */
+    public function exportFeedback()
+    {
+        if (!Gate::allows('access-admin')) {
+            abort(403);
+        }
+
+        $fileName = 'ergovision_feedback_' . now()->format('Ymd_His') . '.csv';
+
+        $headers = [
+            'Content-Type' => 'text/csv',
+            'Content-Disposition' => "attachment; filename=\"{$fileName}\"",
+        ];
+
+        $callback = function () {
+            $handle = fopen('php://output', 'w');
+
+            fputcsv($handle, [
+                'user_id',
+                'user_name',
+                'user_email',
+                'occupation',
+                'age',
+                'daily_sitting_hours',
+                'pre_existing_pain',
+                'pain_details',
+                'feedback_id',
+                'fatigue_level',
+                'accuracy_rating',
+                'comments',
+                'created_at',
+            ]);
+
+            SessionFeedback::with('user')
+                ->orderBy('created_at', 'asc')
+                ->chunk(500, function ($items) use ($handle) {
+                    foreach ($items as $fb) {
+                        $user = $fb->user;
+
+                        fputcsv($handle, [
+                            $fb->user_id,
+                            optional($user)->name,
+                            optional($user)->email,
+                            optional($user)->occupation ?? 'N/A',
+                            optional($user)->age ?? 'N/A',
+                            optional($user)->daily_sitting_hours ?? 'N/A',
+                            optional($user)->has_musculoskeletal_issues ? 'Yes' : 'No',
+                            optional($user)->musculoskeletal_details ?? 'N/A',
+                            $fb->id,
+                            $fb->fatigue_level,
+                            $fb->accuracy_rating,
+                            $fb->comments,
+                            $fb->created_at,
+                        ]);
+                    }
+                });
+
+            fclose($handle);
+        };
+
+        return response()->stream($callback, 200, $headers);
+    }
+
+    /**
      * Helper to get posture trends for the line chart.
      */
     private function getWeeklyTrends()

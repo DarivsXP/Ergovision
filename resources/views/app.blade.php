@@ -41,6 +41,46 @@
         </style>
 
         @routes
+        @php
+            // #region agent log
+            try {
+                $component = $page['component'] ?? null;
+                $pageAsset = $component ? "resources/js/Pages/{$component}.vue" : null;
+                $manifestPath = public_path('build/manifest.json');
+                $manifest = is_file($manifestPath) ? json_decode(file_get_contents($manifestPath), true) : null;
+                $manifestHasPageAsset = is_array($manifest) && $pageAsset ? array_key_exists($pageAsset, $manifest) : null;
+                $manifestHasAppAsset = is_array($manifest) ? array_key_exists('resources/js/app.js', $manifest) : null;
+
+                file_put_contents(base_path('debug-e65186.log'), json_encode([
+                    'sessionId' => 'e65186',
+                    'runId' => 'pre-fix',
+                    'hypothesisId' => 'H1',
+                    'location' => 'resources/views/app.blade.php:instrumentation',
+                    'message' => 'Vite inputs and manifest presence',
+                    'data' => [
+                        'component' => $component,
+                        'pageAsset' => $pageAsset,
+                        'manifestPathExists' => is_file($manifestPath),
+                        'manifestHasPageAsset' => $manifestHasPageAsset,
+                        'manifestHasAppAsset' => $manifestHasAppAsset,
+                    ],
+                    'timestamp' => (int) floor(microtime(true) * 1000),
+                ]) . PHP_EOL, FILE_APPEND);
+            } catch (\Throwable $e) {
+                file_put_contents(base_path('debug-e65186.log'), json_encode([
+                    'sessionId' => 'e65186',
+                    'runId' => 'pre-fix',
+                    'hypothesisId' => 'H1',
+                    'location' => 'resources/views/app.blade.php:instrumentation',
+                    'message' => 'Instrumentation failure',
+                    'data' => [
+                        'error' => $e->getMessage(),
+                    ],
+                    'timestamp' => (int) floor(microtime(true) * 1000),
+                ]) . PHP_EOL, FILE_APPEND);
+            }
+            // #endregion agent log
+        @endphp
         @vite(['resources/js/app.js', "resources/js/Pages/{$page['component']}.vue"])
         @inertiaHead
     </head>

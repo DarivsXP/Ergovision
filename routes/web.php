@@ -105,6 +105,7 @@ Route::middleware(['auth', 'verified', CheckOnboarding::class])->group(function 
             Route::patch('/users/{user}', [AdminController::class, 'update'])->name('users.update');
             Route::delete('/users/{user}', [AdminController::class, 'destroy'])->name('users.destroy');
             Route::get('/export/telemetry', [AdminController::class, 'exportTelemetry'])->name('export.telemetry');
+            Route::get('/export/feedback', [AdminController::class, 'exportFeedback'])->name('export.feedback');
         });
 });
 

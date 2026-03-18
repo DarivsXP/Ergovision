@@ -31,13 +31,20 @@ const props = defineProps({
                         </div>
                     </div>
 
-                    <div class="flex items-center">
+                    <div class="flex items-center gap-3 flex-wrap justify-center">
                         <a :href="route('admin.export.telemetry')"
                            class="flex items-center gap-2 px-6 py-4 bg-indigo-600 hover:bg-indigo-500 rounded-2xl text-xs font-black text-white uppercase tracking-widest transition-all shadow-[0_0_20px_rgba(79,70,229,0.4)] group">
                             <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 group-hover:-translate-y-1 transition-transform" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a2 2 0 002 2h12a2 2 0 002-2v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
                             </svg>
                             Export Telemetry Data
+                        </a>
+                        <a :href="route('admin.export.feedback')"
+                           class="flex items-center gap-2 px-6 py-4 bg-slate-800 hover:bg-slate-700 rounded-2xl text-xs font-black text-white uppercase tracking-widest transition-all border border-white/10 group">
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-emerald-400 group-hover:-translate-y-1 transition-transform" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 8h10M7 12h6m-6 8l-4-4V4a2 2 0 012-2h14a2 2 0 012 2v12a2 2 0 01-2 2H7z" />
+                            </svg>
+                            Export Feedback Data
                         </a>
                     </div>
                 </div>

@@ -48,6 +48,12 @@ const deleteUser = (user) => {
                     >
                         Export Telemetry CSV
                     </a>
+                    <a
+                        :href="route('admin.export.feedback')"
+                        class="px-4 py-2 rounded-full bg-slate-800 hover:bg-slate-700 text-emerald-300 text-[10px] font-black uppercase tracking-[0.2em] border border-emerald-500/40"
+                    >
+                        Export Feedback CSV
+                    </a>
                     <Link :href="route('register')" class="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg text-xs font-bold uppercase tracking-widest transition shadow-lg shadow-indigo-500/20">
                         + Add New User
                     </Link>
