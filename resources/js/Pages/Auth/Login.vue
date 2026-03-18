@@ -39,13 +39,27 @@ defineProps({
 
     <div class="min-h-screen flex w-full">
         
-        <div class="hidden lg:flex w-1/2 bg-cover bg-center relative" 
-             style="background-image: url('https://images.unsplash.com/photo-1451187580459-43490279c0fa?q=80&w=2072&auto=format&fit=crop');">
-            <div class="absolute inset-0 bg-indigo-900/40 backdrop-blur-[2px]"></div> 
+        <div
+            class="hidden lg:flex w-1/2 bg-cover bg-center relative"
+            style="background-image:
+                radial-gradient(1200px 600px at 20% 20%, rgba(99,102,241,0.35), transparent 60%),
+                radial-gradient(900px 500px at 80% 30%, rgba(168,85,247,0.25), transparent 60%),
+                radial-gradient(800px 500px at 40% 90%, rgba(16,185,129,0.18), transparent 60%),
+                linear-gradient(135deg, #020617 0%, #0b1224 40%, #020617 100%);"
+        >
+            <div class="absolute inset-0 bg-[#020617]/45 backdrop-blur-[2px]"></div> 
             <div class="w-full h-full flex items-center justify-center p-12 relative z-10">
-                <div class="text-white text-center">
-                    <h1 class="text-4xl font-bold mb-4 text-white">Ergovision AI</h1>
-                    <p class="text-lg text-indigo-100">Your personal posture assistant. Log in to track your progress.</p>
+                <div class="text-white max-w-md space-y-5">
+                    <h1 class="text-[13px] font-black tracking-[0.65em] uppercase text-indigo-200">
+                        Ergovision AI
+                    </h1>
+                    <h2 class="text-4xl font-black tracking-tight leading-tight">
+                        Sit like your <span class="text-indigo-400">future spine</span> is watching.
+                    </h2>
+                    <p class="text-sm text-indigo-100/90 leading-relaxed">
+                        Ergovision uses your webcam to gently nudge you out of a slouch and build healthier sitting habits,
+                        with clear scores and history so you can actually see your progress.
+                    </p>
                 </div>
             </div>
         </div>
@@ -53,11 +67,11 @@ defineProps({
         <div class="w-full lg:w-1/2 flex items-center justify-center bg-gray-50 px-8 py-12">
             <div class="w-full max-w-md space-y-8">
                 
-                <div class="text-center lg:text-left relative">
-                    <h2 class="text-3xl font-bold tracking-tight text-gray-900">
-                        Welcome back
+                <div class="text-center lg:text-left relative space-y-3">
+                    <h2 class="text-3xl font-black tracking-tight text-gray-900">
+                        Welcome back to <span class="text-indigo-600">Ergovision</span>
                     </h2>
-                    <p class="mt-2 text-sm text-gray-600">
+                    <p class="mt-1 text-sm text-gray-600">
                         Don't have an account? 
                         <Link :href="route('register')" class="font-medium text-indigo-600 hover:text-indigo-500 transition duration-150 ease-in-out">
                             Sign up for free

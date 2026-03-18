@@ -18,8 +18,14 @@ const submit = () => {
     <GuestLayout>
         <Head title="Confirm Password" />
 
-        <div class="mb-6 text-sm text-slate-400 leading-relaxed text-center">
-            This is a secure area of the application. Please confirm your password before continuing.
+        <div class="mb-6 text-sm text-slate-300 leading-relaxed text-center space-y-2">
+            <p>
+                You’re about to access a secure area of Ergovision (for example, updating sensitive profile data
+                or exporting telemetry for your thesis).
+            </p>
+            <p class="text-[11px] text-slate-500">
+                Please re‑enter your password so we can confirm it’s really you.
+            </p>
         </div>
 
         <form @submit.prevent="submit" class="space-y-6">

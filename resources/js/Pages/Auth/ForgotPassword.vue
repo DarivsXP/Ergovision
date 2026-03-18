@@ -22,8 +22,15 @@ const submit = () => {
     <GuestLayout>
         <Head title="Forgot Password" />
 
-        <div class="mb-6 text-sm text-slate-400 leading-relaxed text-center">
-            Forgot your password? No problem. Let us know your email address and we will email you a password reset link to choose a new one.
+        <div class="mb-6 text-sm text-slate-300 leading-relaxed text-center space-y-2">
+            <p>
+                Forgot your password? No problem. Enter the email you used for your Ergovision account
+                and we’ll send you a secure reset link.
+            </p>
+            <p class="text-[11px] text-slate-500">
+                Your posture telemetry and feedback history are tied to this account, so make sure you still have
+                access to this inbox before continuing.
+            </p>
         </div>
 
         <div v-if="status" class="mb-6 text-xs font-black text-emerald-400 bg-emerald-500/10 p-4 rounded-xl border border-emerald-500/20 uppercase tracking-widest text-center">

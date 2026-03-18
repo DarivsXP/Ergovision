@@ -23,16 +23,16 @@ const verificationLinkSent = computed(
 
 <template>
     <GuestLayout>
-        <Head title="Email Verification" />
+        <Head title="Verify your Ergovision email" />
 
-        <div class="mb-4 text-sm text-gray-600">
-            Thanks for signing up! Before getting started, could you verify your
-            email address by clicking on the link we just emailed to you? If you
-            didn't receive the email, we will gladly send you another.
+        <div class="mb-4 text-sm text-gray-300 leading-relaxed">
+            Thanks for joining <span class="font-semibold">Ergovision AI</span>! Before you can start logging posture
+            sessions and contributing to the research dataset, we need to verify that this email belongs to you.
+            Click the link in the message we just sent, then return here to continue.
         </div>
 
         <div
-            class="mb-4 text-sm font-medium text-green-600"
+            class="mb-4 text-sm font-medium text-green-500"
             v-if="verificationLinkSent"
         >
             A new verification link has been sent to the email address you

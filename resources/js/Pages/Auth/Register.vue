@@ -34,12 +34,20 @@
         <div class="min-h-screen flex w-full">
             
             <div class="hidden lg:flex w-1/2 bg-cover bg-center relative" 
-                style="background-image: url('https://images.unsplash.com/photo-1519389950473-47ba0277781c?q=80&w=2070&auto=format&fit=crop');">
-                <div class="absolute inset-0 bg-indigo-900/60 backdrop-blur-[1px]"></div>
+                style="background-image: url('https://images.unsplash.com/photo-1598981457915-aea220950616?q=80&w=2070&auto=format&fit=crop');">
+                <div class="absolute inset-0 bg-[#020617]/70 backdrop-blur-[2px]"></div>
                 <div class="w-full h-full flex items-center justify-center p-12 relative z-10">
-                    <div class="text-white text-center">
-                        <h1 class="text-5xl font-black mb-4 tracking-tighter uppercase">ERGOVISION</h1>
-                        <p class="text-xl text-indigo-100 font-medium">Join thousands improving their health through telemetry.</p>
+                    <div class="text-white text-left max-w-md space-y-4">
+                        <h1 class="text-[13px] font-black tracking-[0.65em] uppercase text-indigo-200">
+                            ERGOVISION AI
+                        </h1>
+                        <h2 class="text-4xl font-black mb-1 tracking-tight uppercase">
+                            ERGO<span class="text-indigo-400">VISION</span>
+                        </h2>
+                        <p class="text-sm text-indigo-100/90">
+                            Your AI‑powered posture companion. Create an account to start logging sessions,
+                            tracking scores, and building a healthier relationship with your desk.
+                        </p>
                     </div>
                 </div>
             </div>
@@ -47,11 +55,11 @@
             <div class="w-full lg:w-1/2 flex items-center justify-center bg-white px-8 py-12 overflow-y-auto">
                 <div class="w-full max-w-md space-y-8">
                     
-                    <div class="text-center lg:text-left">
+                    <div class="text-center lg:text-left space-y-3">
                         <h2 class="text-3xl font-black tracking-tighter text-slate-900 uppercase">
-                            Create your account
+                            Create your Ergovision account
                         </h2>
-                        <p class="mt-2 text-sm text-slate-500 font-medium">
+                        <p class="mt-1 text-sm text-slate-500 font-medium">
                             Already have an account? 
                             <Link :href="route('login')" class="font-bold text-indigo-600 hover:text-indigo-500 underline decoration-indigo-200 underline-offset-4">
                                 Log in here
