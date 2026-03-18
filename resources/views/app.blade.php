@@ -41,7 +41,7 @@
         </style>
 
         @routes
-        @vite(['resources/js/app.js'])
+        @vite(['resources/js/app.js', "resources/js/Pages/{$page['component']}.vue"])
         @inertiaHead
     </head>
     <body class="font-sans antialiased bg-[#020617] text-slate-200 min-h-screen">

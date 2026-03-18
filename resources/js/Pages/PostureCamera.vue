@@ -1,6 +1,6 @@
 <script setup>
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
-import { ref, onMounted, onUnmounted } from 'vue';
+import { ref, computed, onMounted, onUnmounted } from 'vue';
 import { router } from '@inertiajs/vue3';
 import { useToast } from '@/Composables/useToast';
 import { usePostureEngine } from '@/Composables/usePostureEngine';
@@ -22,18 +22,80 @@ let pose = null;
 let camera = null;
 
 const showFeedbackModal = ref(false);
+const hasGetUserMedia = ref(false); // set in onMounted after browser check
+
+const cameraUnavailableMessage = computed(() => {
+    const isSecure = typeof window !== 'undefined' && (
+        window.location?.protocol === 'https:' ||
+        window.location?.hostname === 'localhost' ||
+        window.location?.hostname === '127.0.0.1'
+    );
+    return isSecure
+        ? "Your browser doesn't support camera access. Try Chrome, Edge, or Firefox."
+        : "Camera requires HTTPS. Please use https:// or localhost.";
+});
+
+const ensureCameraSupport = () => {
+    const legacyGetUserMedia =
+        navigator.getUserMedia ||
+        navigator.webkitGetUserMedia ||
+        navigator.mozGetUserMedia ||
+        navigator.msGetUserMedia;
+
+    if (!navigator.mediaDevices) {
+        navigator.mediaDevices = {};
+    }
+
+    if (!navigator.mediaDevices.getUserMedia && legacyGetUserMedia) {
+        navigator.mediaDevices.getUserMedia = (constraints) =>
+            new Promise((resolve, reject) => {
+                legacyGetUserMedia.call(navigator, constraints, resolve, reject);
+            });
+    }
+
+    if (!navigator.mediaDevices?.getUserMedia) {
+        const cameraMessage = window.isSecureContext
+            ? "Camera access is not supported in this desktop browser."
+            : "Desktop camera access requires HTTPS or localhost.";
+        toast.error(cameraMessage, "Camera Unavailable");
+        return false;
+    }
+
+    if (!window.Camera || !window.Pose) {
+        toast.error("Camera engine is still loading. Please refresh and try again.", "Camera Unavailable");
+        return false;
+    }
+
+    return true;
+};
+
+const requestRuntimePermissions = async () => {
+    const stream = await navigator.mediaDevices.getUserMedia({
+        video: true,
+        audio: false,
+    });
+
+    stream.getTracks().forEach((track) => track.stop());
+
+    if (window.isSecureContext && 'Notification' in window && Notification.permission === 'default') {
+        try {
+            await Notification.requestPermission();
+        } catch {
+            // Non-blocking: monitoring can still continue without browser notifications.
+        }
+    }
+};
 
 const startCamera = async () => {
-    if (!navigator.mediaDevices?.getUserMedia) {
-        const isSecure = window.location.protocol === 'https:' || window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
-        toast.error(
-            isSecure
-                ? "Your browser doesn't support camera access. Try Chrome, Edge, or Firefox."
-                : "Camera requires HTTPS. Please use a secure URL (https://) or localhost."
-        );
+    const ok = !!(navigator.mediaDevices && typeof navigator.mediaDevices.getUserMedia === 'function');
+    if (!ok) {
+        toast.error(cameraUnavailableMessage.value);
         return;
     }
     try {
+        if (!ensureCameraSupport()) return;
+        await requestRuntimePermissions();
+
         const isMobile = window.innerWidth < 768;
         
         camera = new window.Camera(videoRef.value, {
@@ -45,8 +107,14 @@ const startCamera = async () => {
         camera.start();
         isCameraOn.value = true;
         sessionDurationSecs.value = 0;
-    } catch (e) { 
-        toast.error("Camera Access Denied"); 
+    } catch (e) {
+        const message =
+            e?.name === 'NotAllowedError'
+                ? 'Camera permission was denied. Please allow camera access and try again.'
+                : e?.message?.includes('getUserMedia')
+                  ? 'Desktop camera access is unavailable. Please use HTTPS, localhost, or a supported browser.'
+                  : 'Camera access was denied or is unavailable.';
+        toast.error(message, "Camera Access Failed");
     }
 };
 
@@ -145,6 +213,8 @@ const cameraTour = driver({
 });
 
 onMounted(() => {
+    hasGetUserMedia.value = !!(navigator.mediaDevices && typeof navigator.mediaDevices.getUserMedia === 'function');
+
     if (!localStorage.getItem('has_seen_camera_tour')) {
         setTimeout(() => cameraTour.drive(), 800); 
     }
@@ -265,7 +335,11 @@ const replayCameraTour = () => {
                 </div>
 
                 <div class="mt-10 w-full max-w-xl">
-                    <button id="tour-step-engine" v-if="!isCameraOn" @click="startCamera" class="w-full py-5 bg-indigo-600 hover:bg-indigo-500 text-white font-black rounded-[2rem] shadow-2xl uppercase tracking-widest transition-all">
+                    <div v-if="!hasGetUserMedia" class="w-full py-5 px-6 bg-slate-800/80 border border-amber-500/30 rounded-[2rem] text-center">
+                        <p class="text-amber-400 text-sm font-bold mb-1">Camera unavailable</p>
+                        <p class="text-slate-400 text-xs">{{ cameraUnavailableMessage }}</p>
+                    </div>
+                    <button id="tour-step-engine" v-else-if="!isCameraOn" @click="startCamera" class="w-full py-5 bg-indigo-600 hover:bg-indigo-500 text-white font-black rounded-[2rem] shadow-2xl uppercase tracking-widest transition-all">
                         Initialize Engine
                     </button>
                     <div v-else class="flex gap-4">

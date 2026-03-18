@@ -47,13 +47,13 @@ export function usePostureEngine(videoRef, toast) {
         return `${m}:${s}`;
     });
 
-    const handleAdaptiveFeedback = (slouching, score) => {
+    const handleAdaptiveFeedback = (slouching) => {
         if (slouching) {
             if (!slouchStartTime) slouchStartTime = Date.now();
             const duration = (Date.now() - slouchStartTime) / 1000;
 
-            // Presence check: only when score is below 60% AND sustained bad posture for 60s.
-            if (duration >= 60 && score < 60 && !needsPresenceCheck.value) {
+            // Only pause for a presence check when posture remains poor for a long period.
+            if (duration >= 60 && currentScore.value < 60 && !needsPresenceCheck.value) {
                 needsPresenceCheck.value = true;
                 statusMessage.value = "Tracking Paused";
                 return;
@@ -170,7 +170,8 @@ export function usePostureEngine(videoRef, toast) {
             if (isCalibrated.value) {
                 // RESTORED: Let the AI control the score natively without messy frontend manipulation
                 scoreHistory.value.push(res.data.score);
-                if (scoreHistory.value.length > 5) scoreHistory.value.shift();
+                // Keep smoothing lightweight so the score still reacts quickly to posture changes.
+                if (scoreHistory.value.length > 3) scoreHistory.value.shift();
 
                 const avg = scoreHistory.value.reduce((a, b) => a + b, 0) / scoreHistory.value.length;
                 const finalScore = Math.round(avg);
@@ -180,7 +181,7 @@ export function usePostureEngine(videoRef, toast) {
                 }
 
                 isSlouching.value = res.data.label === 1 || currentScore.value < 75;
-                handleAdaptiveFeedback(isSlouching.value, currentScore.value);
+                handleAdaptiveFeedback(isSlouching.value);
 
                 sessionData.value.scores.push(currentScore.value);
                 sessionData.value.totalFrames++;
