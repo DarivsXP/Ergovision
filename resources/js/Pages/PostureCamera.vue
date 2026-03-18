@@ -14,6 +14,7 @@ const toast = useToast();
 const {
     isCameraOn, isDetected, isCalibrated, isLocking, calibrationCountdown,
     currentScore, isSlouching, statusMessage, formattedDuration, angles,
+    needsPresenceCheck, confirmPresence,
     onResults, triggerCalibration, sessionDurationSecs, cleanup
 } = usePostureEngine(videoRef, toast);
 
@@ -198,6 +199,34 @@ const replayCameraTour = () => {
                         <p class="font-black uppercase tracking-[0.3em] text-xs mt-4" :class="statusMessage === 'BAD POSTURE DETECTED' ? 'text-rose-400 animate-pulse' : 'text-amber-400'">
                             {{ statusMessage === 'BAD POSTURE DETECTED' ? 'Sit Straight to Resume' : "Calibrating Baseline..." }}
                         </p>
+                    </div>
+
+                    <div v-if="needsPresenceCheck" class="absolute inset-0 flex flex-col items-center justify-center bg-slate-950/90 backdrop-blur-md z-50 p-8 text-center">
+                        <div class="max-w-md w-full bg-slate-900 border border-white/10 rounded-[2rem] p-8 shadow-[0_0_50px_rgba(79,70,229,0.15)]">
+                            <p class="text-[10px] font-black uppercase tracking-[0.3em] text-indigo-400">Presence Check</p>
+                            <h3 class="mt-3 text-2xl font-black text-white uppercase tracking-widest">Are you still there?</h3>
+                            <p class="mt-3 text-[11px] text-slate-400 leading-relaxed">
+                                We paused monitoring after a long sustained slouch to avoid alert fatigue.
+                                If you're still present, resume when you're ready.
+                            </p>
+
+                            <div class="mt-6 flex gap-3">
+                                <button
+                                    type="button"
+                                    @click="stopCamera"
+                                    class="flex-1 py-4 rounded-xl border border-white/10 text-slate-300 hover:text-white hover:bg-slate-800 text-[10px] font-black uppercase tracking-widest transition-all"
+                                >
+                                    End Session
+                                </button>
+                                <button
+                                    type="button"
+                                    @click="confirmPresence"
+                                    class="flex-1 py-4 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-[10px] font-black uppercase tracking-widest transition-all shadow-[0_0_20px_rgba(79,70,229,0.3)]"
+                                >
+                                    Resume
+                                </button>
+                            </div>
+                        </div>
                     </div>
 
                     <div v-if="isCameraOn && isCalibrated && (!isDetected || statusMessage === 'Standing - Paused')" class="absolute inset-0 flex flex-col items-center justify-center bg-black/60 backdrop-blur-sm z-40">

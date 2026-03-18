@@ -18,6 +18,7 @@ export function usePostureEngine(videoRef, toast) {
     const sessionDurationSecs = ref(0);
     const angles = ref({ neck: 0, back: 0 });
     const scoreHistory = ref([]);
+    const needsPresenceCheck = ref(false);
 
     // --- Audio Assets ---
     const alertSound = new Audio('/sounds/alert.mp3');
@@ -31,6 +32,7 @@ export function usePostureEngine(videoRef, toast) {
     let lastProcessTime = 0;
     let slouchStartTime = null;
     let lastNotificationTime = 0;
+    let lastToastTime = 0;
 
     // Timer Variables
     let uploadInterval = null;
@@ -50,20 +52,34 @@ export function usePostureEngine(videoRef, toast) {
             if (!slouchStartTime) slouchStartTime = Date.now();
             const duration = (Date.now() - slouchStartTime) / 1000;
 
+            // Presence check: if user slouches continuously for 60s, pause and ask.
+            if (duration >= 60 && !needsPresenceCheck.value) {
+                needsPresenceCheck.value = true;
+                statusMessage.value = "Tracking Paused";
+                return;
+            }
+
             if (duration >= 30) {
                 statusMessage.value = "CRITICAL: POSTURAL RESET REQUIRED";
-            } else if (duration >= 7) {
+            } else if (duration >= 15) {
                 statusMessage.value = "ALERT: SUSTAINED SLOUCH";
-                if (Date.now() - lastNotificationTime > 10000) {
-                    // FIXED: Rewind audio so it reliably plays every 10 seconds
+
+                const now = Date.now();
+
+                // Visual toast: every 5 seconds (15s+ only)
+                if (now - lastToastTime >= 5000) {
+                    toast.warning("Sustained slouch detected. Please sit upright.");
+                    lastToastTime = now;
+                }
+
+                // Audio + alert count: every 15 seconds (15s+ only)
+                if (now - lastNotificationTime >= 15000) {
                     alertSound.currentTime = 0;
                     alertSound.play().catch(e => console.warn("Audio blocked:", e));
-
                     sessionData.value.alerts++;
-                    lastNotificationTime = Date.now();
-                    toast.warning("Persistent deviation detected.");
+                    lastNotificationTime = now;
                 }
-            } else if (duration >= 3) {
+            } else if (duration >= 5) {
                 statusMessage.value = "WARNING: DRIFT DETECTED";
             } else {
                 statusMessage.value = "Monitoring Threshold...";
@@ -72,6 +88,14 @@ export function usePostureEngine(videoRef, toast) {
             statusMessage.value = "Stable State";
             slouchStartTime = null; // Clean reset
         }
+    };
+
+    const confirmPresence = () => {
+        needsPresenceCheck.value = false;
+        slouchStartTime = null;
+        lastNotificationTime = 0;
+        lastToastTime = 0;
+        statusMessage.value = "Stable State";
     };
 
     const uploadSessionData = () => {
@@ -104,6 +128,10 @@ export function usePostureEngine(videoRef, toast) {
 
     const onResults = async (results) => {
         const now = Date.now();
+        if (needsPresenceCheck.value) {
+            // Pause processing until user confirms they are present.
+            return;
+        }
         if (!results.poseLandmarks || results.poseLandmarks.length < 25) {
             isDetected.value = false;
             statusMessage.value = "Searching...";
@@ -214,7 +242,7 @@ export function usePostureEngine(videoRef, toast) {
         chunkActiveSecs = 0;
 
         activeTimer = setInterval(() => {
-            if (isCalibrated.value && isDetected.value && statusMessage.value !== "Standing - Paused") {
+            if (isCalibrated.value && isDetected.value && statusMessage.value !== "Standing - Paused" && !needsPresenceCheck.value) {
                 sessionDurationSecs.value++;
                 chunkActiveSecs++;
             }
@@ -232,6 +260,7 @@ export function usePostureEngine(videoRef, toast) {
     return {
         isCameraOn, isDetected, isCalibrated, isLocking, calibrationCountdown,
         currentScore, isSlouching, statusMessage, formattedDuration, angles,
+        needsPresenceCheck, confirmPresence,
         onResults, triggerCalibration, sessionDurationSecs, cleanup
     };
 }
