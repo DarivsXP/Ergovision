@@ -13,13 +13,13 @@ const props = defineProps({
 
 const telemetry = reactive({
     user_id: props.users?.[0]?.id ?? '',
-    count: 2000,
+    count: 500,
     mode: 'direct',
 });
 
 const site = reactive({
-    total_requests: 400,
-    concurrency: 20,
+    total_requests: 200,
+    concurrency: 10,
 });
 
 const telemetryRunning = ref(false);
@@ -48,7 +48,7 @@ async function runTelemetryBatched() {
     telemetryAggregate.value = null;
     telemetryRunning.value = true;
 
-    const total = Math.max(1, Math.min(100000, Number(telemetry.count) || 0));
+    const total = Math.max(1, Math.min(50000, Number(telemetry.count) || 0));
     const size = batchSize.value;
     const batches = [];
     let left = total;
@@ -87,6 +87,10 @@ async function runTelemetryBatched() {
                 successSum += b.success;
                 failedSum += b.failed;
             }
+
+            // Brief breather to reduce sustained load / proxy pressure.
+            // (Especially helpful on small VPS deployments.)
+            await new Promise((r) => setTimeout(r, 75));
         }
 
         const wallMs = performance.now() - wallT0;

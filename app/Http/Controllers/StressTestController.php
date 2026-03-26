@@ -12,9 +12,18 @@ use Inertia\Inertia;
 
 class StressTestController extends Controller
 {
+    private function ensureStressTestEnabled(): void
+    {
+        // Safety: disable stress tooling on live unless explicitly enabled.
+        if (app()->environment('production') && ! filter_var(env('STRESS_TEST_ENABLED', false), FILTER_VALIDATE_BOOLEAN)) {
+            abort(404);
+        }
+    }
+
     public function index()
     {
         Gate::authorize('access-admin');
+        $this->ensureStressTestEnabled();
 
         return Inertia::render('Admin/StressTest', [
             'users' => User::orderBy('name')
@@ -36,6 +45,7 @@ class StressTestController extends Controller
     public function runTelemetryBatch(Request $request, PostureStressTestService $stress)
     {
         Gate::authorize('access-admin');
+        $this->ensureStressTestEnabled();
 
         set_time_limit(120);
 
@@ -86,6 +96,7 @@ class StressTestController extends Controller
     public function runSiteVisits(Request $request, SiteStressTestService $site)
     {
         Gate::authorize('access-admin');
+        $this->ensureStressTestEnabled();
 
         set_time_limit(120);
 
