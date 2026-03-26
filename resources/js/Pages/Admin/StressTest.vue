@@ -6,6 +6,7 @@ import { computed, reactive, ref } from 'vue';
 
 const props = defineProps({
     users: Array,
+    enabled: { type: Boolean, default: true },
     limits: Object,
     paths: Array,
     httpPoolSize: { type: Number, default: 20 },
@@ -30,6 +31,88 @@ const telemetryAggregate = ref(null);
 const siteRunning = ref(false);
 const siteError = ref(null);
 const siteResult = ref(null);
+
+function downloadText(filename, content, mime = 'text/plain') {
+    const blob = new Blob([content], { type: mime });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
+}
+
+function toCsvRow(values) {
+    return values
+        .map((v) => {
+            const s = String(v ?? '');
+            if (s.includes('"') || s.includes(',') || s.includes('\n')) {
+                return `"${s.replace(/"/g, '""')}"`;
+            }
+            return s;
+        })
+        .join(',');
+}
+
+function exportTelemetryJson() {
+    if (!telemetryAggregate.value) return;
+    downloadText(
+        `ergovision_stress_telemetry_${telemetryAggregate.value.mode}_${Date.now()}.json`,
+        JSON.stringify(telemetryAggregate.value, null, 2),
+        'application/json',
+    );
+}
+
+function exportTelemetryCsv() {
+    if (!telemetryAggregate.value) return;
+    const t = telemetryAggregate.value;
+    const lines = [
+        toCsvRow(['metric', 'value']),
+        toCsvRow(['mode', t.mode]),
+        toCsvRow(['target_user_id', t.target_user_id]),
+        toCsvRow(['target_email', t.target_email]),
+        toCsvRow(['batches', t.batches]),
+        toCsvRow(['total_chunks', t.total_chunks]),
+        toCsvRow(['total_http_ok', t.total_http_ok]),
+        toCsvRow(['total_http_failed', t.total_http_failed]),
+        toCsvRow(['wall_ms_total', t.wall_ms_total]),
+        toCsvRow(['server_time_ms_sum', t.server_time_ms_sum]),
+        toCsvRow(['effective_throughput_per_s', t.effective_throughput_per_s]),
+        toCsvRow(['estimated_concurrent_active_users', t.estimated_concurrent_active_users]),
+        toCsvRow(['assumption_seconds_between_posts', t.assumption_seconds_between_posts]),
+        toCsvRow(['capacity_note', t.capacity_note]),
+    ];
+    downloadText(`ergovision_stress_telemetry_${t.mode}_${Date.now()}.csv`, lines.join('\n'), 'text/csv');
+}
+
+function exportSiteJson() {
+    if (!siteResult.value) return;
+    downloadText(`ergovision_stress_site_${Date.now()}.json`, JSON.stringify(siteResult.value, null, 2), 'application/json');
+}
+
+function exportSiteCsv() {
+    if (!siteResult.value) return;
+    const s = siteResult.value;
+    const lines = [
+        toCsvRow(['metric', 'value']),
+        toCsvRow(['wall_ms', s.wall_ms]),
+        toCsvRow(['total_requests', s.total_requests]),
+        toCsvRow(['success', s.success]),
+        toCsvRow(['failed', s.failed]),
+        toCsvRow(['success_rate_pct', s.success_rate_pct]),
+        toCsvRow(['successful_req_per_s', s.successful_req_per_s]),
+        toCsvRow(['latency_ms_avg', s.latency_ms_avg]),
+        toCsvRow(['latency_ms_p95', s.latency_ms_p95]),
+        toCsvRow(['concurrency', s.concurrency]),
+        toCsvRow(['estimated_concurrent_visitors', s.estimated_concurrent_visitors]),
+        toCsvRow(['assumption_pages_per_user_per_minute', s.assumption_pages_per_user_per_minute]),
+        toCsvRow(['status_counts', JSON.stringify(s.status_counts ?? {})]),
+        toCsvRow(['paths', (s.paths ?? []).join(' ')]),
+    ];
+    downloadText(`ergovision_stress_site_${Date.now()}.csv`, lines.join('\n'), 'text/csv');
+}
 
 const batchSize = computed(() =>
     telemetry.mode === 'direct'
@@ -68,6 +151,10 @@ async function runTelemetryBatched() {
     const wallT0 = performance.now();
 
     try {
+        if (!props.enabled) {
+            telemetryError.value = 'Stress testing is disabled on this environment.';
+            return;
+        }
         for (let i = 0; i < batches.length; i++) {
             telemetryProgress.value = { batch: i + 1, total: batches.length };
             const { data } = await axios.post(
@@ -139,6 +226,10 @@ async function runSiteVisits() {
     siteRunning.value = true;
 
     try {
+        if (!props.enabled) {
+            siteError.value = 'Stress testing is disabled on this environment.';
+            return;
+        }
         const { data } = await axios.post(
             route('admin.stress-test.site-visits'),
             {
@@ -173,6 +264,11 @@ async function runSiteVisits() {
                         Runs are <strong class="text-slate-300">split into small server batches</strong> so reverse proxies (504 Gateway Timeout) stay happy.
                         Concurrent-user figures are <strong class="text-slate-300">heuristic</strong> — document the stated assumptions in your paper.
                     </p>
+                </div>
+
+                <div v-if="!enabled" class="bg-amber-950/40 border border-amber-500/30 rounded-[2rem] p-6 text-amber-100/90 text-sm leading-relaxed">
+                    This stress-testing suite is <strong>disabled</strong> on this environment. To enable on production, set
+                    <code class="text-amber-200">STRESS_TEST_ENABLED=true</code> (and consider using a staging environment).
                 </div>
 
                 <div class="bg-slate-900/80 border border-slate-800 rounded-[2rem] p-6 text-[11px] text-slate-400 leading-relaxed space-y-3">
@@ -240,6 +336,14 @@ fastcgi_read_timeout 120s;</pre>
 
                 <div v-if="siteResult" class="bg-slate-900 border border-emerald-500/30 rounded-[2.5rem] p-8">
                     <h3 class="text-emerald-400 text-xs font-black uppercase tracking-[0.25em] mb-4">Site visit results</h3>
+                    <div class="flex flex-wrap gap-3 mb-6">
+                        <button type="button" class="px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-[10px] font-black uppercase tracking-widest text-white" @click="exportSiteJson">
+                            Export JSON
+                        </button>
+                        <button type="button" class="px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-[10px] font-black uppercase tracking-widest text-white" @click="exportSiteCsv">
+                            Export CSV
+                        </button>
+                    </div>
                     <dl class="grid grid-cols-1 sm:grid-cols-2 gap-4 text-sm">
                         <div>
                             <dt class="text-slate-500 text-[10px] uppercase font-black tracking-wider">Wall time</dt>
@@ -335,6 +439,14 @@ fastcgi_read_timeout 120s;</pre>
 
                 <div v-if="telemetryAggregate" class="bg-slate-900 border border-emerald-500/30 rounded-[2.5rem] p-8">
                     <h3 class="text-emerald-400 text-xs font-black uppercase tracking-[0.25em] mb-4">Telemetry aggregate</h3>
+                    <div class="flex flex-wrap gap-3 mb-6">
+                        <button type="button" class="px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-[10px] font-black uppercase tracking-widest text-white" @click="exportTelemetryJson">
+                            Export JSON
+                        </button>
+                        <button type="button" class="px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-[10px] font-black uppercase tracking-widest text-white" @click="exportTelemetryCsv">
+                            Export CSV
+                        </button>
+                    </div>
                     <dl class="grid grid-cols-1 sm:grid-cols-2 gap-4 text-sm">
                         <div>
                             <dt class="text-slate-500 text-[10px] uppercase font-black tracking-wider">Batches</dt>

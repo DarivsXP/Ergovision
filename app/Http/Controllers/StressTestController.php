@@ -12,22 +12,20 @@ use Inertia\Inertia;
 
 class StressTestController extends Controller
 {
-    private function ensureStressTestEnabled(): void
+    private function stressTestEnabled(): bool
     {
-        // Safety: disable stress tooling on live unless explicitly enabled.
-        if (app()->environment('production') && ! filter_var(env('STRESS_TEST_ENABLED', false), FILTER_VALIDATE_BOOLEAN)) {
-            abort(404);
-        }
+        return ! app()->environment('production')
+            || filter_var(env('STRESS_TEST_ENABLED', false), FILTER_VALIDATE_BOOLEAN);
     }
 
     public function index()
     {
         Gate::authorize('access-admin');
-        $this->ensureStressTestEnabled();
 
         return Inertia::render('Admin/StressTest', [
             'users' => User::orderBy('name')
                 ->get(['id', 'name', 'email']),
+            'enabled' => $this->stressTestEnabled(),
             'limits' => [
                 'telemetry_direct_batch' => PostureStressTestService::MAX_TELEMETRY_DIRECT_PER_REQUEST,
                 'telemetry_http_batch' => PostureStressTestService::MAX_TELEMETRY_HTTP_PER_REQUEST,
@@ -45,7 +43,9 @@ class StressTestController extends Controller
     public function runTelemetryBatch(Request $request, PostureStressTestService $stress)
     {
         Gate::authorize('access-admin');
-        $this->ensureStressTestEnabled();
+        if (! $this->stressTestEnabled()) {
+            abort(404);
+        }
 
         set_time_limit(120);
 
@@ -96,7 +96,9 @@ class StressTestController extends Controller
     public function runSiteVisits(Request $request, SiteStressTestService $site)
     {
         Gate::authorize('access-admin');
-        $this->ensureStressTestEnabled();
+        if (! $this->stressTestEnabled()) {
+            abort(404);
+        }
 
         set_time_limit(120);
 
