@@ -1,21 +1,155 @@
 <script setup>
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
-import { Head, useForm } from '@inertiajs/vue3';
+import { Head } from '@inertiajs/vue3';
+import axios from 'axios';
+import { computed, reactive, ref } from 'vue';
 
 const props = defineProps({
     users: Array,
-    lastResult: Object,
+    limits: Object,
+    paths: Array,
     httpPoolSize: { type: Number, default: 20 },
 });
 
-const form = useForm({
+const telemetry = reactive({
     user_id: props.users?.[0]?.id ?? '',
-    count: 500,
+    count: 2000,
     mode: 'direct',
 });
 
-function submit() {
-    form.post(route('admin.stress-test.store'), { preserveScroll: true });
+const site = reactive({
+    total_requests: 400,
+    concurrency: 20,
+});
+
+const telemetryRunning = ref(false);
+const telemetryError = ref(null);
+const telemetryProgress = ref({ batch: 0, total: 0 });
+const telemetryAggregate = ref(null);
+
+const siteRunning = ref(false);
+const siteError = ref(null);
+const siteResult = ref(null);
+
+const batchSize = computed(() =>
+    telemetry.mode === 'direct'
+        ? props.limits?.telemetry_direct_batch ?? 400
+        : props.limits?.telemetry_http_batch ?? 40,
+);
+
+function estimateTelemetryUsers(okPerSecond) {
+    const interval = 30;
+    if (okPerSecond <= 0) return 0;
+    return Math.floor(okPerSecond * interval);
+}
+
+async function runTelemetryBatched() {
+    telemetryError.value = null;
+    telemetryAggregate.value = null;
+    telemetryRunning.value = true;
+
+    const total = Math.max(1, Math.min(100000, Number(telemetry.count) || 0));
+    const size = batchSize.value;
+    const batches = [];
+    let left = total;
+    while (left > 0) {
+        const n = Math.min(size, left);
+        batches.push(n);
+        left -= n;
+    }
+
+    telemetryProgress.value = { batch: 0, total: batches.length };
+
+    let countSum = 0;
+    let successSum = 0;
+    let failedSum = 0;
+    let serverDurationSum = 0;
+
+    const wallT0 = performance.now();
+
+    try {
+        for (let i = 0; i < batches.length; i++) {
+            telemetryProgress.value = { batch: i + 1, total: batches.length };
+            const { data } = await axios.post(
+                route('admin.stress-test.telemetry'),
+                {
+                    user_id: telemetry.user_id,
+                    mode: telemetry.mode,
+                    count: batches[i],
+                },
+                { headers: { Accept: 'application/json' } },
+            );
+
+            const b = data.batch;
+            serverDurationSum += b.duration_ms;
+            countSum += b.count;
+            if (telemetry.mode === 'http_api') {
+                successSum += b.success;
+                failedSum += b.failed;
+            }
+        }
+
+        const wallMs = performance.now() - wallT0;
+        const wallSec = wallMs / 1000;
+
+        const effectiveThroughput =
+            telemetry.mode === 'http_api'
+                ? wallSec > 0
+                    ? successSum / wallSec
+                    : 0
+                : wallSec > 0
+                  ? countSum / wallSec
+                  : 0;
+
+        telemetryAggregate.value = {
+            mode: telemetry.mode,
+            target_email: props.users?.find((u) => u.id === telemetry.user_id)?.email,
+            target_user_id: telemetry.user_id,
+            batches: batches.length,
+            total_chunks: countSum,
+            total_http_ok: telemetry.mode === 'http_api' ? successSum : null,
+            total_http_failed: telemetry.mode === 'http_api' ? failedSum : null,
+            wall_ms_total: Math.round(wallMs * 100) / 100,
+            server_time_ms_sum: Math.round(serverDurationSum * 100) / 100,
+            effective_throughput_per_s: Math.round(effectiveThroughput * 100) / 100,
+            estimated_concurrent_active_users:
+                telemetry.mode === 'http_api' ? estimateTelemetryUsers(effectiveThroughput) : null,
+            assumption_seconds_between_posts: 30,
+            capacity_note:
+                telemetry.mode === 'direct'
+                    ? 'Direct mode: bulk DB inserts; throughput is not the same as concurrent browser/API users.'
+                    : null,
+        };
+    } catch (e) {
+        telemetryError.value =
+            e.response?.data?.message || e.response?.data?.errors?.count?.[0] || e.message || 'Request failed';
+    } finally {
+        telemetryRunning.value = false;
+        telemetryProgress.value = { batch: 0, total: 0 };
+    }
+}
+
+async function runSiteVisits() {
+    siteError.value = null;
+    siteResult.value = null;
+    siteRunning.value = true;
+
+    try {
+        const { data } = await axios.post(
+            route('admin.stress-test.site-visits'),
+            {
+                total_requests: site.total_requests,
+                concurrency: site.concurrency,
+            },
+            { headers: { Accept: 'application/json' } },
+        );
+        siteResult.value = data.site;
+    } catch (e) {
+        siteError.value =
+            e.response?.data?.message || e.response?.data?.errors?.total_requests?.[0] || e.message || 'Request failed';
+    } finally {
+        siteRunning.value = false;
+    }
 }
 </script>
 
@@ -27,98 +161,219 @@ function submit() {
             <div class="max-w-4xl mx-auto sm:px-6 lg:px-8 space-y-8">
                 <div class="px-6 py-8 bg-white/[0.02] border border-white/5 rounded-[3rem] backdrop-blur-md shadow-2xl">
                     <h2 class="font-black text-3xl text-white tracking-tighter uppercase">
-                        Load <span class="text-amber-500">Stress Test</span>
+                        Research <span class="text-amber-500">Load Suite</span>
                     </h2>
-                    <p class="mt-3 text-slate-400 text-sm leading-relaxed max-w-2xl">
-                        Generate synthetic posture telemetry for benchmarking. <strong class="text-slate-300">Direct</strong>
-                        bulk-inserts rows (database write throughput). <strong class="text-slate-300">HTTP API</strong>
-                        exercises Sanctum auth, validation, and the same <code class="text-indigo-400">POST /api/posture-chunks</code>
-                        path used by clients. Use a dedicated test account and remove test data afterward if needed.
+                    <p class="mt-3 text-slate-400 text-sm leading-relaxed max-w-3xl">
+                        Two workloads: <strong class="text-slate-300">public page visits</strong> (anonymous GETs to home, login, and legal pages)
+                        and <strong class="text-slate-300">posture telemetry</strong> (DB bulk insert vs. real <code class="text-indigo-400">POST /api/posture-chunks</code>).
+                        Runs are <strong class="text-slate-300">split into small server batches</strong> so reverse proxies (504 Gateway Timeout) stay happy.
+                        Concurrent-user figures are <strong class="text-slate-300">heuristic</strong> — document the stated assumptions in your paper.
                     </p>
                 </div>
 
-                <div v-if="!users?.length" class="bg-amber-950/40 border border-amber-500/30 rounded-[2.5rem] p-8 text-amber-100/90 text-sm">
-                    No users found. Create an account first, then return here to attach test telemetry to a user.
+                <div class="bg-slate-900/80 border border-slate-800 rounded-[2rem] p-6 text-[11px] text-slate-400 leading-relaxed space-y-3">
+                    <p class="font-black uppercase tracking-widest text-slate-500">Avoiding 504 timeouts</p>
+                    <p>
+                        Long single requests often hit nginx/cloud <code class="text-slate-300">proxy_read_timeout</code> (often 60s). This UI sends many short requests
+                        (max {{ limits?.telemetry_direct_batch }} direct rows or {{ limits?.telemetry_http_batch }} API posts per call). For huge CLI runs use
+                        <code class="text-slate-300">php artisan stress:posture</code> / <code class="text-slate-300">php artisan stress:site</code> on the server.
+                    </p>
+                    <p>
+                        If you still see 504 behind nginx, raise timeouts (example):
+                    </p>
+                    <pre class="text-[10px] text-slate-300 font-mono bg-slate-950 border border-slate-800 rounded-lg p-3 overflow-x-auto">proxy_connect_timeout 120s;
+proxy_send_timeout 120s;
+proxy_read_timeout 120s;
+fastcgi_send_timeout 120s;
+fastcgi_read_timeout 120s;</pre>
+                    <p>
+                        CLI <code class="text-slate-300">stress:site</code> must resolve <code class="text-slate-300">APP_URL</code> from PHP (hosts entry + web server running).
+                        The browser UI runs against the same origin and does not need that.
+                    </p>
                 </div>
 
-                <div v-else class="bg-slate-900 border border-slate-800 rounded-[2.5rem] p-8 shadow-xl space-y-6">
-                    <h3 class="text-white text-xs font-black uppercase tracking-[0.25em]">Run from browser</h3>
+                <!-- Site visits -->
+                <div class="bg-slate-900 border border-cyan-500/20 rounded-[2.5rem] p-8 shadow-xl space-y-6">
+                    <h3 class="text-cyan-400 text-xs font-black uppercase tracking-[0.25em]">1. Public site visits (anonymous pages)</h3>
+                    <p class="text-sm text-slate-400">
+                        Rotates across: <span class="text-slate-300 font-mono text-xs">{{ paths?.join(', ') }}</span>. Measures success rate, throughput, and latency (avg / p95).
+                        <strong class="text-slate-300">Estimated concurrent visitors</strong> assumes ~2 page views per user per minute while browsing.
+                    </p>
 
-                    <form class="space-y-6" @submit.prevent="submit">
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-6">
                         <div>
-                            <label class="block text-[10px] font-black uppercase tracking-widest text-slate-500 mb-2">Target user</label>
-                            <select
-                                v-model="form.user_id"
-                                class="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 text-sm text-white focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
-                                required
-                            >
-                                <option v-for="u in users" :key="u.id" :value="u.id">
-                                    {{ u.name }} — {{ u.email }}
-                                </option>
-                            </select>
-                            <p v-if="form.errors.user_id" class="mt-2 text-xs text-red-400">{{ form.errors.user_id }}</p>
-                        </div>
-
-                        <div>
-                            <label class="block text-[10px] font-black uppercase tracking-widest text-slate-500 mb-2">Number of chunks</label>
+                            <label class="block text-[10px] font-black uppercase tracking-widest text-slate-500 mb-2">Total GET requests</label>
                             <input
-                                v-model.number="form.count"
+                                v-model.number="site.total_requests"
                                 type="number"
                                 min="1"
-                                max="10000"
-                                class="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 text-sm text-white focus:ring-2 focus:ring-indigo-500"
-                                required
+                                max="5000"
+                                class="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 text-sm text-white"
                             />
-                            <p class="mt-1 text-[10px] text-slate-500">Direct: up to 10,000. HTTP API: max 2,000 per run.</p>
-                            <p v-if="form.errors.count" class="mt-2 text-xs text-red-400">{{ form.errors.count }}</p>
                         </div>
-
                         <div>
-                            <span class="block text-[10px] font-black uppercase tracking-widest text-slate-500 mb-3">Mode</span>
-                            <div class="flex flex-col sm:flex-row gap-4">
-                                <label class="flex items-center gap-3 cursor-pointer">
-                                    <input v-model="form.mode" type="radio" value="direct" class="text-indigo-600 focus:ring-indigo-500" />
-                                    <span class="text-sm text-slate-300">Direct (bulk DB insert)</span>
-                                </label>
-                                <label class="flex items-center gap-3 cursor-pointer">
-                                    <input v-model="form.mode" type="radio" value="http_api" class="text-indigo-600 focus:ring-indigo-500" />
-                                    <span class="text-sm text-slate-300">HTTP API (Sanctum + Laravel stack)</span>
-                                </label>
-                            </div>
-                            <p v-if="form.errors.mode" class="mt-2 text-xs text-red-400">{{ form.errors.mode }}</p>
+                            <label class="block text-[10px] font-black uppercase tracking-widest text-slate-500 mb-2">Concurrency (parallel per wave)</label>
+                            <input
+                                v-model.number="site.concurrency"
+                                type="number"
+                                min="1"
+                                max="50"
+                                class="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 text-sm text-white"
+                            />
                         </div>
+                    </div>
 
-                        <button
-                            type="submit"
-                            :disabled="form.processing"
-                            class="w-full sm:w-auto px-8 py-4 bg-amber-600 hover:bg-amber-500 disabled:opacity-50 rounded-2xl text-xs font-black text-white uppercase tracking-widest transition-all shadow-[0_0_24px_rgba(245,158,11,0.35)]"
-                        >
-                            {{ form.processing ? 'Running…' : 'Run stress test' }}
-                        </button>
-                    </form>
+                    <button
+                        type="button"
+                        :disabled="siteRunning"
+                        class="px-8 py-4 bg-cyan-600 hover:bg-cyan-500 disabled:opacity-50 rounded-2xl text-xs font-black text-white uppercase tracking-widest"
+                        @click="runSiteVisits"
+                    >
+                        {{ siteRunning ? 'Running…' : 'Run site visit test' }}
+                    </button>
+                    <p v-if="siteError" class="text-sm text-red-400">{{ siteError }}</p>
                 </div>
 
-                <div v-if="lastResult" class="bg-slate-900 border border-emerald-500/30 rounded-[2.5rem] p-8 shadow-[0_0_30px_rgba(16,185,129,0.08)]">
-                    <h3 class="text-emerald-400 text-xs font-black uppercase tracking-[0.25em] mb-4">Last result</h3>
+                <div v-if="siteResult" class="bg-slate-900 border border-emerald-500/30 rounded-[2.5rem] p-8">
+                    <h3 class="text-emerald-400 text-xs font-black uppercase tracking-[0.25em] mb-4">Site visit results</h3>
                     <dl class="grid grid-cols-1 sm:grid-cols-2 gap-4 text-sm">
-                        <div><dt class="text-slate-500 text-[10px] uppercase font-black tracking-wider">Mode</dt><dd class="text-white font-mono mt-1">{{ lastResult.mode }}</dd></div>
-                        <div><dt class="text-slate-500 text-[10px] uppercase font-black tracking-wider">Target</dt><dd class="text-white font-mono mt-1">{{ lastResult.target_email }} (ID {{ lastResult.target_user_id }})</dd></div>
-                        <div><dt class="text-slate-500 text-[10px] uppercase font-black tracking-wider">Duration</dt><dd class="text-white font-mono mt-1">{{ lastResult.duration_ms }} ms</dd></div>
-                        <div><dt class="text-slate-500 text-[10px] uppercase font-black tracking-wider">Throughput</dt><dd class="text-white font-mono mt-1">{{ lastResult.throughput_per_s }} /s</dd></div>
-                        <template v-if="lastResult.mode === 'http_api'">
-                            <div><dt class="text-slate-500 text-[10px] uppercase font-black tracking-wider">HTTP OK</dt><dd class="text-white font-mono mt-1">{{ lastResult.success }}</dd></div>
-                            <div><dt class="text-slate-500 text-[10px] uppercase font-black tracking-wider">HTTP failed</dt><dd class="text-white font-mono mt-1">{{ lastResult.failed }}</dd></div>
-                        </template>
+                        <div>
+                            <dt class="text-slate-500 text-[10px] uppercase font-black tracking-wider">Wall time</dt>
+                            <dd class="text-white font-mono mt-1">{{ siteResult.wall_ms }} ms</dd>
+                        </div>
+                        <div>
+                            <dt class="text-slate-500 text-[10px] uppercase font-black tracking-wider">Success / failed</dt>
+                            <dd class="text-white font-mono mt-1">{{ siteResult.success }} / {{ siteResult.failed }}</dd>
+                        </div>
+                        <div>
+                            <dt class="text-slate-500 text-[10px] uppercase font-black tracking-wider">Success rate</dt>
+                            <dd class="text-white font-mono mt-1">{{ siteResult.success_rate_pct }}%</dd>
+                        </div>
+                        <div>
+                            <dt class="text-slate-500 text-[10px] uppercase font-black tracking-wider">Successful req/s</dt>
+                            <dd class="text-white font-mono mt-1">{{ siteResult.successful_req_per_s }}</dd>
+                        </div>
+                        <div>
+                            <dt class="text-slate-500 text-[10px] uppercase font-black tracking-wider">Latency avg / p95</dt>
+                            <dd class="text-white font-mono mt-1">{{ siteResult.latency_ms_avg }} / {{ siteResult.latency_ms_p95 }} ms</dd>
+                        </div>
+                        <div>
+                            <dt class="text-slate-500 text-[10px] uppercase font-black tracking-wider">Est. concurrent visitors</dt>
+                            <dd class="text-white font-mono mt-1">
+                                ~{{ siteResult.estimated_concurrent_visitors }}
+                                <span class="text-slate-500 text-xs">(assumption: {{ siteResult.assumption_pages_per_user_per_minute }} pages/user/min)</span>
+                            </dd>
+                        </div>
+                    </dl>
+                </div>
+
+                <!-- Telemetry -->
+                <div v-if="!users?.length" class="bg-amber-950/40 border border-amber-500/30 rounded-[2.5rem] p-8 text-amber-100/90 text-sm">
+                    No users found. Create an account first for telemetry tests.
+                </div>
+
+                <div v-else class="bg-slate-900 border border-amber-500/20 rounded-[2.5rem] p-8 shadow-xl space-y-6">
+                    <h3 class="text-amber-400 text-xs font-black uppercase tracking-[0.25em]">2. Posture telemetry</h3>
+                    <p class="text-sm text-slate-400">
+                        Total workload is split into batches of up to <strong class="text-white">{{ batchSize }}</strong> per request
+                        ({{ telemetry.mode === 'direct' ? 'direct' : 'HTTP API' }}). End-to-end wall time includes network + all batches.
+                    </p>
+
+                    <div>
+                        <label class="block text-[10px] font-black uppercase tracking-widest text-slate-500 mb-2">Target user</label>
+                        <select
+                            v-model="telemetry.user_id"
+                            class="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 text-sm text-white"
+                        >
+                            <option v-for="u in users" :key="u.id" :value="u.id">{{ u.name }} — {{ u.email }}</option>
+                        </select>
+                    </div>
+
+                    <div>
+                        <label class="block text-[10px] font-black uppercase tracking-widest text-slate-500 mb-2">Total chunks (all batches)</label>
+                        <input
+                            v-model.number="telemetry.count"
+                            type="number"
+                            min="1"
+                            max="100000"
+                            class="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 text-sm text-white"
+                        />
+                    </div>
+
+                    <div>
+                        <span class="block text-[10px] font-black uppercase tracking-widest text-slate-500 mb-3">Mode</span>
+                        <div class="flex flex-col sm:flex-row gap-4">
+                            <label class="flex items-center gap-3 cursor-pointer">
+                                <input v-model="telemetry.mode" type="radio" value="direct" class="text-amber-600" />
+                                <span class="text-sm text-slate-300">Direct (bulk DB insert)</span>
+                            </label>
+                            <label class="flex items-center gap-3 cursor-pointer">
+                                <input v-model="telemetry.mode" type="radio" value="http_api" class="text-amber-600" />
+                                <span class="text-sm text-slate-300">HTTP API (Sanctum + Laravel)</span>
+                            </label>
+                        </div>
+                    </div>
+
+                    <button
+                        type="button"
+                        :disabled="telemetryRunning"
+                        class="px-8 py-4 bg-amber-600 hover:bg-amber-500 disabled:opacity-50 rounded-2xl text-xs font-black text-white uppercase tracking-widest"
+                        @click="runTelemetryBatched"
+                    >
+                        {{ telemetryRunning ? 'Running…' : 'Run telemetry test' }}
+                    </button>
+
+                    <p v-if="telemetryRunning && telemetryProgress.total" class="text-xs text-slate-400">
+                        Batch {{ telemetryProgress.batch }} / {{ telemetryProgress.total }}
+                    </p>
+                    <p v-if="telemetryError" class="text-sm text-red-400">{{ telemetryError }}</p>
+                </div>
+
+                <div v-if="telemetryAggregate" class="bg-slate-900 border border-emerald-500/30 rounded-[2.5rem] p-8">
+                    <h3 class="text-emerald-400 text-xs font-black uppercase tracking-[0.25em] mb-4">Telemetry aggregate</h3>
+                    <dl class="grid grid-cols-1 sm:grid-cols-2 gap-4 text-sm">
+                        <div>
+                            <dt class="text-slate-500 text-[10px] uppercase font-black tracking-wider">Batches</dt>
+                            <dd class="text-white font-mono mt-1">{{ telemetryAggregate.batches }}</dd>
+                        </div>
+                        <div>
+                            <dt class="text-slate-500 text-[10px] uppercase font-black tracking-wider">Total chunks</dt>
+                            <dd class="text-white font-mono mt-1">{{ telemetryAggregate.total_chunks }}</dd>
+                        </div>
+                        <div v-if="telemetryAggregate.total_http_ok !== null">
+                            <dt class="text-slate-500 text-[10px] uppercase font-black tracking-wider">HTTP OK / failed</dt>
+                            <dd class="text-white font-mono mt-1">{{ telemetryAggregate.total_http_ok }} / {{ telemetryAggregate.total_http_failed }}</dd>
+                        </div>
+                        <div>
+                            <dt class="text-slate-500 text-[10px] uppercase font-black tracking-wider">Client wall time (all batches)</dt>
+                            <dd class="text-white font-mono mt-1">{{ telemetryAggregate.wall_ms_total }} ms</dd>
+                        </div>
+                        <div>
+                            <dt class="text-slate-500 text-[10px] uppercase font-black tracking-wider">Effective throughput</dt>
+                            <dd class="text-white font-mono mt-1">{{ telemetryAggregate.effective_throughput_per_s }} /s</dd>
+                        </div>
+                        <div v-if="telemetryAggregate.estimated_concurrent_active_users !== null">
+                            <dt class="text-slate-500 text-[10px] uppercase font-black tracking-wider">Est. concurrent active users (telemetry)</dt>
+                            <dd class="text-white font-mono mt-1">
+                                ~{{ telemetryAggregate.estimated_concurrent_active_users }}
+                                <span class="text-slate-500 text-xs">(1 post / {{ telemetryAggregate.assumption_seconds_between_posts }}s per user)</span>
+                            </dd>
+                        </div>
+                        <div v-if="telemetryAggregate.capacity_note" class="sm:col-span-2">
+                            <dt class="text-slate-500 text-[10px] uppercase font-black tracking-wider">Note</dt>
+                            <dd class="text-slate-300 text-xs mt-1">{{ telemetryAggregate.capacity_note }}</dd>
+                        </div>
                     </dl>
                 </div>
 
                 <div class="bg-slate-900/80 border border-slate-800 rounded-[2rem] p-8">
-                    <h3 class="text-white text-xs font-black uppercase tracking-[0.25em] mb-3">Reproducible CLI (paper / appendix)</h3>
-                    <pre class="text-[11px] leading-relaxed text-slate-300 font-mono bg-slate-950 border border-slate-800 rounded-xl p-4 overflow-x-auto">php artisan stress:posture --user=1 --count=5000 --mode=direct
+                    <h3 class="text-white text-xs font-black uppercase tracking-[0.25em] mb-3">CLI (appendix / reproducibility)</h3>
+                    <pre class="text-[11px] leading-relaxed text-slate-300 font-mono bg-slate-950 border border-slate-800 rounded-xl p-4 overflow-x-auto">php artisan stress:site --requests=800 --concurrency=25
+php artisan stress:posture --user=1 --count=5000 --mode=direct
 php artisan stress:posture --user=1 --count=500 --mode=http_api</pre>
                     <p class="mt-3 text-[10px] text-slate-500 leading-relaxed">
-                        Report in your paper: machine specs, PHP and Laravel versions, database driver, <code class="text-slate-400">APP_URL</code>,
-                        and concurrent pool size ({{ httpPoolSize }} for HTTP mode — see <code class="text-slate-400">PostureStressTestService::HTTP_POOL_SIZE</code>).
+                        Report: hardware, PHP &amp; Laravel versions, database, web server, <code class="text-slate-400">APP_URL</code>, reverse-proxy timeouts, HTTP pool size
+                        {{ httpPoolSize }} (telemetry API waves), and the assumptions above for concurrent-user estimates.
                     </p>
                 </div>
             </div>

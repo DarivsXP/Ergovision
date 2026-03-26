@@ -108,7 +108,8 @@ Route::middleware(['auth', 'verified', CheckOnboarding::class])->group(function 
             Route::get('/export/telemetry', [AdminController::class, 'exportTelemetry'])->name('export.telemetry');
             Route::get('/export/feedback', [AdminController::class, 'exportFeedback'])->name('export.feedback');
             Route::get('/stress-test', [StressTestController::class, 'index'])->name('stress-test');
-            Route::post('/stress-test', [StressTestController::class, 'store'])->name('stress-test.store');
+            Route::post('/stress-test/telemetry', [StressTestController::class, 'runTelemetryBatch'])->name('stress-test.telemetry');
+            Route::post('/stress-test/site-visits', [StressTestController::class, 'runSiteVisits'])->name('stress-test.site-visits');
         });
 });
 

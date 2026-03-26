@@ -3,6 +3,7 @@
 namespace App\Services;
 
 use App\Models\PostureChunk;
+use App\Support\StressTestHttpSsl;
 use App\Models\User;
 use Illuminate\Http\Client\Pool;
 use Illuminate\Support\Facades\Http;
@@ -15,6 +16,12 @@ class PostureStressTestService
 
     /** Concurrent HTTP requests per pool batch (document for reproducibility). */
     public const HTTP_POOL_SIZE = 20;
+
+    /** Per HTTP request (browser batch) — keeps gateway/proxy timeouts away (504). */
+    public const MAX_TELEMETRY_DIRECT_PER_REQUEST = 400;
+
+    /** Per HTTP request for Sanctum API path (heavier than direct insert). */
+    public const MAX_TELEMETRY_HTTP_PER_REQUEST = 40;
 
     /**
      * Bulk-insert posture chunks (database write throughput).
@@ -80,10 +87,14 @@ class PostureStressTestService
                 $batch = min(self::HTTP_POOL_SIZE, $remaining);
                 $responses = Http::pool(function (Pool $pool) use ($baseUrl, $token, $payload, $batch) {
                     for ($i = 0; $i < $batch; $i++) {
-                        $pool->as((string) $i)
+                        $pending = $pool->as((string) $i)
                             ->withToken($token)
                             ->acceptJson()
-                            ->post("{$baseUrl}/api/posture-chunks", $payload);
+                            ->timeout(60);
+                        if (StressTestHttpSsl::shouldRelax()) {
+                            $pending = $pending->withoutVerifying();
+                        }
+                        $pending->post("{$baseUrl}/api/posture-chunks", $payload);
                     }
                 });
 

@@ -4,6 +4,8 @@ namespace App\Http\Controllers;
 
 use App\Models\User;
 use App\Services\PostureStressTestService;
+use App\Services\SiteStressTestService;
+use App\Support\StressCapacityMetrics;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Gate;
 use Inertia\Inertia;
@@ -17,51 +19,89 @@ class StressTestController extends Controller
         return Inertia::render('Admin/StressTest', [
             'users' => User::orderBy('name')
                 ->get(['id', 'name', 'email']),
-            'lastResult' => null,
+            'limits' => [
+                'telemetry_direct_batch' => PostureStressTestService::MAX_TELEMETRY_DIRECT_PER_REQUEST,
+                'telemetry_http_batch' => PostureStressTestService::MAX_TELEMETRY_HTTP_PER_REQUEST,
+                'site_max_requests' => 5000,
+                'site_max_concurrency' => 50,
+            ],
+            'paths' => SiteStressTestService::DEFAULT_PATHS,
             'httpPoolSize' => PostureStressTestService::HTTP_POOL_SIZE,
         ]);
     }
 
-    public function store(Request $request, PostureStressTestService $stress)
+    /**
+     * Single batch (small) telemetry run — UI sends many batches to avoid 504 from proxies.
+     */
+    public function runTelemetryBatch(Request $request, PostureStressTestService $stress)
     {
         Gate::authorize('access-admin');
 
-        set_time_limit(300);
+        set_time_limit(120);
 
         $validated = $request->validate([
             'user_id' => 'required|exists:users,id',
-            'count' => 'required|integer|min:1|max:10000',
+            'count' => 'required|integer|min:1',
             'mode' => 'required|in:direct,http_api',
         ]);
 
-        $user = User::findOrFail($validated['user_id']);
-        $count = $validated['count'];
-        $mode = $validated['mode'];
+        $max = $validated['mode'] === 'direct'
+            ? PostureStressTestService::MAX_TELEMETRY_DIRECT_PER_REQUEST
+            : PostureStressTestService::MAX_TELEMETRY_HTTP_PER_REQUEST;
 
-        if ($mode === 'http_api' && $count > 2000) {
-            return Inertia::render('Admin/StressTest', [
-                'users' => User::orderBy('name')
-                    ->get(['id', 'name', 'email']),
-                'lastResult' => null,
-                'httpPoolSize' => PostureStressTestService::HTTP_POOL_SIZE,
-            ])->withErrors([
-                'count' => 'HTTP API mode is limited to 2,000 requests per run to avoid timeouts.',
-            ]);
+        if ($validated['count'] > $max) {
+            return response()->json([
+                'message' => "Per request maximum is {$max} for this mode (use batched runs in the UI).",
+            ], 422);
         }
 
+        $user = User::findOrFail($validated['user_id']);
+        $mode = $validated['mode'];
+
         $result = $mode === 'direct'
-            ? $stress->runDirect($user, $count)
-            : $stress->runHttpApi($user, $count);
+            ? $stress->runDirect($user, $validated['count'])
+            : $stress->runHttpApi($user, $validated['count']);
 
         $result['mode'] = $mode;
         $result['target_user_id'] = $user->id;
         $result['target_email'] = $user->email;
 
-        return Inertia::render('Admin/StressTest', [
-            'users' => User::orderBy('name')
-                ->get(['id', 'name', 'email']),
-            'lastResult' => $result,
-            'httpPoolSize' => PostureStressTestService::HTTP_POOL_SIZE,
+        if ($mode === 'http_api') {
+            $result['estimated_concurrent_active_users'] = StressCapacityMetrics::telemetryConcurrentUsers(
+                (float) $result['throughput_per_s'],
+                30.0
+            );
+            $result['assumption_seconds_between_posts_per_user'] = 30;
+        } else {
+            $result['estimated_concurrent_active_users'] = null;
+            $result['capacity_note'] = 'Direct mode measures bulk DB insert throughput; it does not model concurrent HTTP clients.';
+        }
+
+        return response()->json(['ok' => true, 'batch' => $result]);
+    }
+
+    /**
+     * Public page GET load (home, login, legal pages) with concurrency waves.
+     */
+    public function runSiteVisits(Request $request, SiteStressTestService $site)
+    {
+        Gate::authorize('access-admin');
+
+        set_time_limit(120);
+
+        $validated = $request->validate([
+            'total_requests' => 'required|integer|min:1|max:5000',
+            'concurrency' => 'required|integer|min:1|max:50',
         ]);
+
+        $baseUrl = rtrim((string) config('app.url'), '/');
+
+        $result = $site->runPublicPageLoadTest(
+            $baseUrl,
+            $validated['total_requests'],
+            $validated['concurrency']
+        );
+
+        return response()->json(['ok' => true, 'site' => $result]);
     }
 }
