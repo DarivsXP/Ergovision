@@ -116,6 +116,9 @@ Route::middleware(['auth', 'verified', CheckOnboarding::class])->group(function 
             Route::post('/stress-test/site-visits', [StressTestController::class, 'runSiteVisits'])
                 ->middleware('throttle:stress-test')
                 ->name('stress-test.site-visits');
+            Route::post('/stress-test/ai-inference', [StressTestController::class, 'runAiInference'])
+                ->middleware('throttle:stress-test')
+                ->name('stress-test.ai-inference');
         });
 });
 

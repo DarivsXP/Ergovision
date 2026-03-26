@@ -10,6 +10,7 @@ const props = defineProps({
     limits: Object,
     paths: Array,
     httpPoolSize: { type: Number, default: 20 },
+    ai: Object,
 });
 
 const telemetry = reactive({
@@ -23,6 +24,11 @@ const site = reactive({
     concurrency: 10,
 });
 
+const ai = reactive({
+    total_requests: 200,
+    concurrency: 10,
+});
+
 const telemetryRunning = ref(false);
 const telemetryError = ref(null);
 const telemetryProgress = ref({ batch: 0, total: 0 });
@@ -31,6 +37,10 @@ const telemetryAggregate = ref(null);
 const siteRunning = ref(false);
 const siteError = ref(null);
 const siteResult = ref(null);
+
+const aiRunning = ref(false);
+const aiError = ref(null);
+const aiResult = ref(null);
 
 function downloadText(filename, content, mime = 'text/plain') {
     const blob = new Blob([content], { type: mime });
@@ -112,6 +122,48 @@ function exportSiteCsv() {
         toCsvRow(['paths', (s.paths ?? []).join(' ')]),
     ];
     downloadText(`ergovision_stress_site_${Date.now()}.csv`, lines.join('\n'), 'text/csv');
+}
+
+function exportAiJson() {
+    if (!aiResult.value) return;
+    downloadText(`ergovision_stress_ai_${Date.now()}.json`, JSON.stringify(aiResult.value, null, 2), 'application/json');
+}
+
+function exportAiCsv() {
+    if (!aiResult.value) return;
+    const a = aiResult.value;
+    const lines = [
+        toCsvRow(['metric', 'value']),
+        toCsvRow(['endpoint', a.endpoint]),
+        toCsvRow(['wall_ms', a.wall_ms]),
+        toCsvRow(['total_requests', a.total_requests]),
+        toCsvRow(['success', a.success]),
+        toCsvRow(['failed', a.failed]),
+        toCsvRow(['success_rate_pct', a.success_rate_pct]),
+        toCsvRow(['successful_req_per_s', a.successful_req_per_s]),
+        toCsvRow(['latency_ms_avg', a.latency_ms_avg]),
+        toCsvRow(['latency_ms_p95', a.latency_ms_p95]),
+        toCsvRow(['concurrency', a.concurrency]),
+        toCsvRow(['estimated_concurrent_active_users', a.estimated_concurrent_active_users]),
+        toCsvRow(['assumption_inferences_per_user_per_second', a.assumption_inferences_per_user_per_second]),
+        toCsvRow(['stable', a.stable]),
+        toCsvRow(['status_counts', JSON.stringify(a.status_counts ?? {})]),
+    ];
+    downloadText(`ergovision_stress_ai_${Date.now()}.csv`, lines.join('\n'), 'text/csv');
+}
+
+function exportAiTableRow() {
+    if (!aiResult.value) return;
+    const a = aiResult.value;
+    const row = [
+        'AI Microservice (Python / MediaPipe)',
+        'Concurrent Posture Inference',
+        `${a.concurrency} concurrent, ${a.total_requests} req`,
+        `${a.latency_ms_p95} ms (p95)`,
+        `${a.success_rate_pct}%`,
+        a.stable ? 'Stable' : 'Unstable',
+    ].join(' | ');
+    downloadText(`ergovision_stress_ai_table_row_${Date.now()}.txt`, row, 'text/plain');
 }
 
 const batchSize = computed(() =>
@@ -246,6 +298,33 @@ async function runSiteVisits() {
         siteRunning.value = false;
     }
 }
+
+async function runAiInference() {
+    aiError.value = null;
+    aiResult.value = null;
+    aiRunning.value = true;
+
+    try {
+        if (!props.enabled) {
+            aiError.value = 'Stress testing is disabled on this environment.';
+            return;
+        }
+        const { data } = await axios.post(
+            route('admin.stress-test.ai-inference'),
+            {
+                total_requests: ai.total_requests,
+                concurrency: ai.concurrency,
+            },
+            { headers: { Accept: 'application/json' } },
+        );
+        aiResult.value = data.ai;
+    } catch (e) {
+        aiError.value =
+            e.response?.data?.message || e.response?.data?.errors?.total_requests?.[0] || e.message || 'Request failed';
+    } finally {
+        aiRunning.value = false;
+    }
+}
 </script>
 
 <template>
@@ -262,7 +341,6 @@ async function runSiteVisits() {
                         Two workloads: <strong class="text-slate-300">public page visits</strong> (anonymous GETs to home, login, and legal pages)
                         and <strong class="text-slate-300">posture telemetry</strong> (DB bulk insert vs. real <code class="text-indigo-400">POST /api/posture-chunks</code>).
                         Runs are <strong class="text-slate-300">split into small server batches</strong> so reverse proxies (504 Gateway Timeout) stay happy.
-                        Concurrent-user figures are <strong class="text-slate-300">heuristic</strong> — document the stated assumptions in your paper.
                     </p>
                 </div>
 
@@ -375,13 +453,69 @@ fastcgi_read_timeout 120s;</pre>
                     </dl>
                 </div>
 
+                <!-- AI microservice -->
+                <div class="bg-slate-900 border border-fuchsia-500/20 rounded-[2.5rem] p-8 shadow-xl space-y-6">
+                    <h3 class="text-fuchsia-400 text-xs font-black uppercase tracking-[0.25em]\">2. AI microservice (Python / MediaPipe)</h3>
+                    <p class="text-sm text-slate-400">
+                        Endpoint: <span class="text-slate-300 font-mono text-xs">{{ ai?.endpoint || '(set STRESS_AI_ENDPOINT)' }}</span>.
+                        This test sends a standard <code class="text-indigo-400">/predict</code>-style landmarks payload and measures
+                        throughput + latency. Estimated concurrent users assumes the frontend runs ~5 inferences/second.
+                    </p>
+
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-6">
+                        <div>
+                            <label class="block text-[10px] font-black uppercase tracking-widest text-slate-500 mb-2">Total inference requests</label>
+                            <input v-model.number="ai.total_requests" type="number" min="1" :max="limits?.ai_max_requests ?? 3000"
+                                   class="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 text-sm text-white" />
+                        </div>
+                        <div>
+                            <label class="block text-[10px] font-black uppercase tracking-widest text-slate-500 mb-2">Concurrency</label>
+                            <input v-model.number="ai.concurrency" type="number" min="1" :max="limits?.ai_max_concurrency ?? 50"
+                                   class="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 text-sm text-white" />
+                        </div>
+                    </div>
+
+                    <button type="button" :disabled="aiRunning"
+                            class="px-8 py-4 bg-fuchsia-600 hover:bg-fuchsia-500 disabled:opacity-50 rounded-2xl text-xs font-black text-white uppercase tracking-widest"
+                            @click="runAiInference">
+                        {{ aiRunning ? 'Running…' : 'Run AI inference test' }}
+                    </button>
+                    <p v-if="aiError" class="text-sm text-red-400">{{ aiError }}</p>
+                </div>
+
+                <div v-if="aiResult" class="bg-slate-900 border border-emerald-500/30 rounded-[2.5rem] p-8">
+                    <h3 class="text-emerald-400 text-xs font-black uppercase tracking-[0.25em] mb-4\">AI inference results</h3>
+                    <div class="flex flex-wrap gap-3 mb-6">
+                        <button type="button" class="px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-[10px] font-black uppercase tracking-widest text-white" @click="exportAiJson">
+                            Export JSON
+                        </button>
+                        <button type="button" class="px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-[10px] font-black uppercase tracking-widest text-white" @click="exportAiCsv">
+                            Export CSV
+                        </button>
+                        <button type="button" class="px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-[10px] font-black uppercase tracking-widest text-white" @click="exportAiTableRow">
+                            Export table row
+                        </button>
+                    </div>
+
+                    <dl class="grid grid-cols-1 sm:grid-cols-2 gap-4 text-sm">
+                        <div><dt class="text-slate-500 text-[10px] uppercase font-black tracking-wider">Endpoint</dt><dd class="text-white font-mono mt-1">{{ aiResult.endpoint }}</dd></div>
+                        <div><dt class="text-slate-500 text-[10px] uppercase font-black tracking-wider">Concurrency</dt><dd class="text-white font-mono mt-1">{{ aiResult.concurrency }}</dd></div>
+                        <div><dt class="text-slate-500 text-[10px] uppercase font-black tracking-wider">Success / failed</dt><dd class="text-white font-mono mt-1">{{ aiResult.success }} / {{ aiResult.failed }}</dd></div>
+                        <div><dt class="text-slate-500 text-[10px] uppercase font-black tracking-wider">Success rate</dt><dd class="text-white font-mono mt-1">{{ aiResult.success_rate_pct }}%</dd></div>
+                        <div><dt class="text-slate-500 text-[10px] uppercase font-black tracking-wider">Successful req/s</dt><dd class="text-white font-mono mt-1">{{ aiResult.successful_req_per_s }}</dd></div>
+                        <div><dt class="text-slate-500 text-[10px] uppercase font-black tracking-wider">Latency avg / p95</dt><dd class="text-white font-mono mt-1">{{ aiResult.latency_ms_avg }} / {{ aiResult.latency_ms_p95 }} ms</dd></div>
+                        <div><dt class="text-slate-500 text-[10px] uppercase font-black tracking-wider">Est. concurrent active users</dt><dd class="text-white font-mono mt-1">~{{ aiResult.estimated_concurrent_active_users }} <span class="text-slate-500 text-xs">(assumption: {{ aiResult.assumption_inferences_per_user_per_second }} inf/s/user)</span></dd></div>
+                        <div><dt class="text-slate-500 text-[10px] uppercase font-black tracking-wider">Stable</dt><dd class="text-white font-mono mt-1">{{ aiResult.stable ? 'Yes' : 'No' }}</dd></div>
+                    </dl>
+                </div>
+
                 <!-- Telemetry -->
                 <div v-if="!users?.length" class="bg-amber-950/40 border border-amber-500/30 rounded-[2.5rem] p-8 text-amber-100/90 text-sm">
                     No users found. Create an account first for telemetry tests.
                 </div>
 
                 <div v-else class="bg-slate-900 border border-amber-500/20 rounded-[2.5rem] p-8 shadow-xl space-y-6">
-                    <h3 class="text-amber-400 text-xs font-black uppercase tracking-[0.25em]">2. Posture telemetry</h3>
+                    <h3 class="text-amber-400 text-xs font-black uppercase tracking-[0.25em]">3. Posture telemetry</h3>
                     <p class="text-sm text-slate-400">
                         Total workload is split into batches of up to <strong class="text-white">{{ batchSize }}</strong> per request
                         ({{ telemetry.mode === 'direct' ? 'direct' : 'HTTP API' }}). End-to-end wall time includes network + all batches.

@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\User;
+use App\Services\AiStressTestService;
 use App\Services\PostureStressTestService;
 use App\Services\SiteStressTestService;
 use App\Support\StressCapacityMetrics;
@@ -31,9 +32,15 @@ class StressTestController extends Controller
                 'telemetry_http_batch' => PostureStressTestService::MAX_TELEMETRY_HTTP_PER_REQUEST,
                 'site_max_requests' => 5000,
                 'site_max_concurrency' => 50,
+                'ai_max_requests' => AiStressTestService::MAX_REQUESTS,
+                'ai_max_concurrency' => AiStressTestService::MAX_CONCURRENCY,
             ],
             'paths' => SiteStressTestService::DEFAULT_PATHS,
             'httpPoolSize' => PostureStressTestService::HTTP_POOL_SIZE,
+            'ai' => [
+                'endpoint' => (new AiStressTestService())->endpoint(),
+                'assumption_inferences_per_user_per_second' => AiStressTestService::ASSUMPTION_INFERENCES_PER_USER_PER_SECOND,
+            ],
         ]);
     }
 
@@ -116,5 +123,24 @@ class StressTestController extends Controller
         );
 
         return response()->json(['ok' => true, 'site' => $result]);
+    }
+
+    public function runAiInference(Request $request, AiStressTestService $ai)
+    {
+        Gate::authorize('access-admin');
+        if (! $this->stressTestEnabled()) {
+            abort(404);
+        }
+
+        set_time_limit(120);
+
+        $validated = $request->validate([
+            'total_requests' => 'required|integer|min:1|max:'.AiStressTestService::MAX_REQUESTS,
+            'concurrency' => 'required|integer|min:1|max:'.AiStressTestService::MAX_CONCURRENCY,
+        ]);
+
+        $result = $ai->run($validated['total_requests'], $validated['concurrency']);
+
+        return response()->json(['ok' => true, 'ai' => $result]);
     }
 }
