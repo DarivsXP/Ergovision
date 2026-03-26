@@ -4,7 +4,9 @@ import axios from 'axios';
 export function usePostureEngine(videoRef, toast) {
     // --- Configuration ---
     const isLocal = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
-    const AI_ENDPOINT = isLocal ? 'http://127.0.0.1:5000/predict' : 'https://ergovision-ai.onrender.com/predict';
+    const AI_ENDPOINT =
+        import.meta.env.VITE_AI_ENDPOINT ||
+        (isLocal ? 'http://127.0.0.1:5000/predict' : 'https://ergovision-ai.onrender.com/predict');
 
     // --- State ---
     const isCameraOn = ref(false);

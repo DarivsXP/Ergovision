@@ -63,7 +63,14 @@ class PostureChunkController extends Controller
             'alert_count'     => 'required|integer|min:0',  
         ]);
 
-        $request->user()->postureChunks()->create($validated);
+        $chunk = $request->user()->postureChunks()->create($validated);
+
+        if ($request->expectsJson() || $request->is('api/*')) {
+            return response()->json([
+                'ok' => true,
+                'id' => $chunk->id,
+            ]);
+        }
 
         return redirect()->back();
     }
@@ -100,4 +107,4 @@ class PostureChunkController extends Controller
 
         return redirect()->back()->with('message', 'Session removed from history.');
     }
-    }
+}

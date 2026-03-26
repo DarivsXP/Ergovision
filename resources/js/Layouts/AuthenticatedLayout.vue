@@ -67,6 +67,11 @@ const dashboardRoute = computed(() => {
                                           :class="route().current('admin.users.index') ? 'bg-indigo-600 text-white' : ''">
                                         User Management
                                     </Link>
+                                    <Link :href="route('admin.stress-test')" 
+                                          class="px-5 py-2 rounded-full text-xs font-black uppercase tracking-widest transition-all text-slate-500 hover:text-white"
+                                          :class="route().current('admin.stress-test') ? 'bg-indigo-600 text-white' : ''">
+                                        Stress Test
+                                    </Link>
                                 </template>
 
                                 <template v-else>

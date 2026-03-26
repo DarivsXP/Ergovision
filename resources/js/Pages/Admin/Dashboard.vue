@@ -46,6 +46,10 @@ const props = defineProps({
                             </svg>
                             Export Feedback Data
                         </a>
+                        <Link :href="route('admin.stress-test')"
+                              class="flex items-center gap-2 px-6 py-4 bg-amber-600/90 hover:bg-amber-500 rounded-2xl text-xs font-black text-white uppercase tracking-widest transition-all border border-amber-500/30 shadow-[0_0_20px_rgba(245,158,11,0.25)]">
+                            Stress Test
+                        </Link>
                     </div>
                 </div>
 

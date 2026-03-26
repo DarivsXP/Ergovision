@@ -8,6 +8,7 @@ use App\Http\Controllers\OnboardingController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Middleware\CheckOnboarding;
 use App\Http\Controllers\FeedbackController;
+use App\Http\Controllers\StressTestController;
 use Illuminate\Support\Facades\Route;
 use Illuminate\Support\Facades\Auth;
 use Inertia\Inertia;
@@ -106,6 +107,8 @@ Route::middleware(['auth', 'verified', CheckOnboarding::class])->group(function 
             Route::delete('/users/{user}', [AdminController::class, 'destroy'])->name('users.destroy');
             Route::get('/export/telemetry', [AdminController::class, 'exportTelemetry'])->name('export.telemetry');
             Route::get('/export/feedback', [AdminController::class, 'exportFeedback'])->name('export.feedback');
+            Route::get('/stress-test', [StressTestController::class, 'index'])->name('stress-test');
+            Route::post('/stress-test', [StressTestController::class, 'store'])->name('stress-test.store');
         });
 });
 
