@@ -9,7 +9,7 @@ import { Head, Link } from '@inertiajs/vue3';
         <div class="max-w-3xl mx-auto bg-slate-900 border border-white/10 rounded-3xl shadow-2xl overflow-hidden">
             
             <div class="bg-indigo-600/10 border-b border-indigo-500/20 px-8 py-8 text-center">
-                <Link href="/" class="inline-block mb-4 text-2xl font-black text-white tracking-tighter uppercase">
+                <Link :href="route('home')" class="inline-block mb-4 text-2xl font-black text-white tracking-tighter uppercase">
                     ERGO<span class="text-indigo-500">VISION</span>
                 </Link>
                 <h1 class="text-3xl font-black text-white uppercase tracking-widest">Privacy Policy</h1>

@@ -34,18 +34,32 @@
 
         <style>
             html, body {
-                background-color: #020617 !important;
                 margin: 0;
                 padding: 0;
                 min-height: 100%;
             }
         </style>
 
+        <script>
+            (function () {
+                try {
+                    var t = localStorage.getItem('ergovision-theme');
+                    if (t === 'light') {
+                        document.documentElement.classList.remove('dark');
+                    } else {
+                        document.documentElement.classList.add('dark');
+                    }
+                } catch (e) {
+                    document.documentElement.classList.add('dark');
+                }
+            })();
+        </script>
+
         @routes
         @vite(['resources/js/app.js', "resources/js/Pages/{$page['component']}.vue"])
         @inertiaHead
     </head>
-    <body class="font-sans antialiased bg-[#020617] text-slate-200 min-h-screen">
+    <body class="font-sans antialiased min-h-screen bg-slate-50 text-slate-900 transition-colors duration-300 dark:bg-[#020617] dark:text-slate-200">
         @inertia
     </body>
 </html>

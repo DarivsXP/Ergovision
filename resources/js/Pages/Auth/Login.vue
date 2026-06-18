@@ -68,6 +68,9 @@ defineProps({
             <div class="w-full max-w-md space-y-8">
                 
                 <div class="text-center lg:text-left relative space-y-3">
+                    <Link :href="route('home')" class="inline-flex items-center gap-1 text-[10px] font-black uppercase tracking-widest text-gray-400 hover:text-indigo-600 transition mb-2">
+                        ← Back to home
+                    </Link>
                     <h2 class="text-3xl font-black tracking-tight text-gray-900">
                         Welcome back to <span class="text-indigo-600">Ergovision</span>
                     </h2>
